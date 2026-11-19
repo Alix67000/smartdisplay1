@@ -8,7 +8,7 @@ export default async function handler(req,res){
  if(!app)return res.status(401).json({error:'Connecte-toi à l’application avec Google.'});
  if(action==='start'&&req.method==='POST'){
   if(req.headers.origin!==ORIGIN)return res.status(403).json({error:'Origine non autorisée.'});
-  if(!process.env.GOOGLE_OAUTH_CLIENT_SECRET||!process.env.APP_SESSION_SECRET||!process.env.ALLOWED_GOOGLE_EMAIL)return res.status(503).json({error:'Connexion Google non configurée.'});
+  if(!(process.env.GOOGLE_OAUTH_CLIENT_SECRET||(process.env.GOOGLE_OAUTH_CLIENT_SECRET_ENCRYPTED&&process.env.GOOGLE_OAUTH_WRAP_KEY))||!process.env.APP_SESSION_SECRET||!process.env.ALLOWED_GOOGLE_EMAIL)return res.status(503).json({error:'Connexion Google non configurée.'});
   const transaction=newOAuthState(app.uid);res.setHeader('Set-Cookie',transaction.cookie);
   const query=new URLSearchParams({client_id:CLIENT_ID,redirect_uri:CALLBACK,response_type:'code',scope:GOOGLE_SCOPES.join(' '),access_type:'offline',include_granted_scopes:'true',prompt:'consent select_account',state:transaction.state,nonce:transaction.nonce,code_challenge:transaction.challenge,code_challenge_method:'S256'});
   return res.status(200).json({url:'https://accounts.google.com/o/oauth2/v2/auth?'+query});

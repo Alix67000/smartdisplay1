@@ -4,7 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {loadEnv} from 'vite';
 
 // Only scan public build output. Never print secret values or file contents.
-const serverSecrets=['GEMINI_API_KEY','GOOGLE_OAUTH_CLIENT_SECRET','APP_SESSION_SECRET','NAVASAN_API_KEY','GITHUB_TOKEN'];
+const serverSecrets=['GEMINI_API_KEY','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_OAUTH_CLIENT_SECRET_ENCRYPTED','GOOGLE_OAUTH_WRAP_KEY','APP_SESSION_SECRET','NAVASAN_API_KEY','GITHUB_TOKEN'];
 export async function checkClientSecrets(directory,env){
  const problems=[];
  if(Object.keys(env).some(k=>/^VITE_.*(?:GEMINI|GOOGLE|APP_SESSION|NAVASAN).*(?:KEY|SECRET|TOKEN)/i.test(k)))problems.push('Variable sensible exposable par Vite détectée.');

@@ -11,7 +11,10 @@ export const GOOGLE_SCOPES=['openid','email',GMAIL_SCOPE,CALENDAR_SCOPE];
 const keys=createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const duration=30*24*3600;
 
-function oauthSecret(){const value=process.env.GOOGLE_OAUTH_CLIENT_SECRET;if(!value)throw Error('oauth_not_configured');return value}
+function oauthSecret(){
+ const direct=process.env.GOOGLE_OAUTH_CLIENT_SECRET;if(direct)return direct;
+ try{const key=Buffer.from(process.env.GOOGLE_OAUTH_WRAP_KEY||'','base64url'),raw=Buffer.from(process.env.GOOGLE_OAUTH_CLIENT_SECRET_ENCRYPTED||'','base64url');if(key.length!==32||raw.length<29)throw Error();const decipher=createDecipheriv('aes-256-gcm',key,raw.subarray(0,12));decipher.setAuthTag(raw.subarray(12,28));return Buffer.concat([decipher.update(raw.subarray(28)),decipher.final()]).toString('utf8')}catch{throw Error('oauth_not_configured')}
+}
 function encryptionKey(){const value=process.env.APP_SESSION_SECRET;if(!value||value.length<32)throw Error('session_not_configured');return createHash('sha256').update('pilotage-google-v1:'+value).digest()}
 function encrypt(data){const iv=Buffer.from(randomValue(12),'base64url'),cipher=createCipheriv('aes-256-gcm',encryptionKey(),iv);const body=Buffer.concat([cipher.update(JSON.stringify(data),'utf8'),cipher.final()]);return Buffer.concat([iv,cipher.getAuthTag(),body]).toString('base64url')}
 function decrypt(value){try{const raw=Buffer.from(String(value||''),'base64url');if(raw.length<29)return null;const decipher=createDecipheriv('aes-256-gcm',encryptionKey(),raw.subarray(0,12));decipher.setAuthTag(raw.subarray(12,28));return JSON.parse(Buffer.concat([decipher.update(raw.subarray(28)),decipher.final()]).toString('utf8'))}catch{return null}}
