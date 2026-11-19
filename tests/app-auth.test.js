@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {generateKeyPair,exportJWK,createLocalJWKSet,SignJWT} from 'jose';
 import {verifyFirebaseToken,appCookie,appSession,FIREBASE_PROJECT} from '../server/app-auth.js';
 import appSessionHandler from '../api/app-session.js';
-import nylas from '../api/nylas.js';
-import callback from '../api/nylas-callback.js';
+import google from '../api/google.js';
+import callback from '../api/google-callback.js';
 import analyze from '../api/analyze.js';
-process.env.NYLAS_SESSION_SECRET='a-test-secret-long-enough-to-be-valid';process.env.ALLOWED_GOOGLE_EMAIL='owner@example.test';
+process.env.APP_SESSION_SECRET='a-test-secret-long-enough-to-be-valid';process.env.ALLOWED_GOOGLE_EMAIL='owner@example.test';
 const now=()=>Math.floor(Date.now()/1000);
 function response(){return {statusCode:200,headers:{},setHeader(k,v){this.headers[k]=v},status(s){this.statusCode=s;return this},json(x){this.body=x;return this},end(){return this},redirect(s,l){this.statusCode=s;this.location=l;return this}}}
 test('jeton Firebase : signature, expiration, projet, e-mail et fournisseur vérifiés',async()=>{
@@ -20,8 +20,8 @@ test('jeton Firebase : signature, expiration, projet, e-mail et fournisseur vér
 });
 test('cookie distinct, signé, borné dans le temps et contrôlé sur chaque API',async()=>{
  const app=appCookie('u','owner@example.test',now()+3600).split(';')[0];assert.equal(appSession({headers:{cookie:app}}).uid,'u');assert.equal(appSession({headers:{cookie:app+'x'}}),null);assert.equal(appSession({headers:{cookie:''}}),null);
- let r=response();await nylas({method:'GET',query:{action:'start'},headers:{}},r);assert.equal(r.statusCode,401);
- r=response();await callback({method:'GET',headers:{},query:{}},r);assert.match(r.location,/nylas=session/);
+ let r=response();await google({method:'POST',query:{action:'start'},headers:{}},r);assert.equal(r.statusCode,401);
+ r=response();await callback({method:'GET',headers:{},query:{}},r);assert.match(r.location,/google=session/);
  r=response();await analyze({method:'POST',headers:{origin:'https://smartdisplay1.vercel.app'},body:{}},r);assert.equal(r.statusCode,401);
  r=response();await appSessionHandler({method:'POST',query:{action:'logout'},headers:{origin:'https://evil.test'}},r);assert.equal(r.statusCode,403);
  r=response();await appSessionHandler({method:'POST',query:{action:'logout'},headers:{origin:'https://smartdisplay1.vercel.app'}},r);assert.equal(r.statusCode,200);assert.ok(r.headers['Set-Cookie'].some(x=>x.startsWith('pilotage_app=;')));

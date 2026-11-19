@@ -1,5 +1,5 @@
 import {appSession} from '../server/app-auth.js';
-import {ORIGIN} from '../server/nylas.js';
+import {ORIGIN} from '../server/session.js';
 import {parseNavasan} from '../server/navasan.js';
 
 // No upstream URLs, credentials, or provider response bodies in logs/errors.

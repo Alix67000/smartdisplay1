@@ -1,11 +1,11 @@
-import {ORIGIN,COOKIE,STATE_COOKIE,cookieValue} from '../server/nylas.js';
+import {ORIGIN,GOOGLE_COOKIE,GOOGLE_STATE_COOKIE,cookieValue} from '../server/session.js';
 import {APP_COOKIE,appCookie,verifyFirebaseToken} from '../server/app-auth.js';
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
  if(req.method!=='POST')return res.status(405).json({error:'Méthode non autorisée.'});
  if(req.headers.origin!==ORIGIN)return res.status(403).json({error:'Origine non autorisée.'});
  if(req.query?.action==='logout'){
-  res.setHeader('Set-Cookie',[cookieValue(APP_COOKIE,'',0),cookieValue(COOKIE,'',0),cookieValue(STATE_COOKIE,'',0)]);
+  res.setHeader('Set-Cookie',[cookieValue(APP_COOKIE,'',0),cookieValue(GOOGLE_COOKIE,'',0),cookieValue(GOOGLE_STATE_COOKIE,'',0),cookieValue('pilotage_nylas','',0),cookieValue('pilotage_nylas_state','',0)]);
   return res.status(200).json({ok:true});
  }
  if(req.query?.action!=='login')return res.status(400).json({error:'Action non autorisée.'});

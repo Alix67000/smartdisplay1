@@ -340,9 +340,9 @@ function App() {
         sessionStorage.removeItem("pilotage.google.session.v1");
       } catch {}
       const url = new URL(window.location.href);
-      const result = url.searchParams.get("nylas");
+      const result = url.searchParams.get("google");
       if (result) {
-        url.searchParams.delete("nylas");
+        url.searchParams.delete("google");
         window.history.replaceState(
           {},
           "",
@@ -352,9 +352,9 @@ function App() {
       try {
         let sessionFailed = false;
         try {
-          const r = await requestWithTimeout("/api/nylas?action=session");
+          const r = await requestWithTimeout("/api/google?action=session");
           if (r.ok) {
-            setGoogleToken("nylas");
+            setGoogleToken("google");
             await googleSync(false);
             return;
           }
@@ -370,7 +370,7 @@ function App() {
         }
         if (!sessionFailed && result === "permissions")
           setError(
-            "La connexion n’a pas été activée : le compte ou les autorisations ne correspondent pas à la lecture seule. Vérifie les autorisations accordées dans Nylas.",
+            "La connexion n’a pas été activée : le compte ou les autorisations Google ne correspondent pas aux accès en lecture seule.",
           );
         else if (!sessionFailed && result && result !== "ok") {
           const details = {
@@ -380,24 +380,10 @@ function App() {
             fournisseur:
               "Le fournisseur a signalé une erreur (code FOURNISSEUR).",
             code: "Code d’autorisation manquant ou invalide (code AUTORISATION).",
-            echange: "Échange du code avec Nylas impossible (code ECHANGE).",
-            "echange-pkce":
-              "Nylas a refusé la vérification de sécurité (code ECHANGE-PKCE).",
-            "echange-code":
-              "Nylas indique que le code est invalide ou expiré (code ECHANGE-CODE).",
-            "echange-redirection":
-              "Nylas a refusé la redirection (code ECHANGE-REDIRECTION).",
-            "echange-client":
-              "Nylas a refusé la configuration du client (code ECHANGE-CLIENT).",
-            "echange-requete":
-              "Nylas a refusé la demande (code ECHANGE-REQUETE).",
-            grant:
-              "Réponse Nylas sans identifiant de connexion valide (code GRANT).",
-            verification:
-              "Vérification de la connexion Nylas impossible (code VERIFICATION).",
-            echec: "La connexion Nylas n’a pas abouti.",
+            echange: "Google n’a pas pu terminer la connexion sécurisée (code ECHANGE).",
+            refresh: "Google n’a pas fourni l’autorisation durable nécessaire (code REFRESH).",
           };
-          setError(details[result] || "La connexion Nylas n’a pas abouti.");
+          setError(details[result] || "La connexion Google n’a pas abouti.");
         }
         if (msal) {
           try {
@@ -498,19 +484,19 @@ function App() {
       generation = sessionGeneration.current;
     try {
       const [sr, mr, er] = await Promise.all([
-        requestWithTimeout("/api/nylas?action=session"),
-        requestWithTimeout("/api/nylas?action=messages&hours=" + hours),
-        requestWithTimeout("/api/nylas?action=events"),
+        requestWithTimeout("/api/google?action=session"),
+        requestWithTimeout("/api/google?action=messages&hours=" + hours),
+        requestWithTimeout("/api/google?action=events"),
       ]);
       if (!sr.ok || !mr.ok || !er.ok) {
         if (sr.status === 401 || mr.status === 401 || er.status === 401) {
           expired = true;
           setGoogleToken(null);
           setAccount(null);
-          throw new Error("La connexion Nylas a expiré. Reconnecte Gmail.");
+          throw new Error("La connexion Google a expiré. Reconnecte ton compte.");
         }
         throw new Error(
-          "Impossible de charger les e-mails avec Nylas. Réessaie.",
+          "Impossible de charger Gmail ou Google Agenda. Réessaie.",
         );
       }
       const profile = await sr.json(),
@@ -524,7 +510,7 @@ function App() {
       setEvents(Array.isArray(calendar.events) ? calendar.events : []);
       setAccount({
         provider: "google",
-        via: "nylas",
+        via: "google",
         name: profile.email.split("@")[0],
         username: profile.email,
       });
@@ -535,14 +521,14 @@ function App() {
       if (generation === sessionGeneration.current) {
         setMailError(true);
         setSessionUnavailable(!expired);
-        setError(e.message || "Impossible de charger les e-mails avec Nylas.");
+        setError(e.message || "Impossible de charger Gmail ou Google Agenda.");
       }
     } finally {
       mailRunning.current = false;
       setLoading(false);
     }
   }
-  async function connectNylas() {
+  async function connectGoogle() {
     setError("");
     if (account?.provider === "microsoft") {
       setError("Déconnecte d’abord Outlook.");
@@ -561,7 +547,10 @@ function App() {
         headers: { Authorization: "Bearer " + token },
       });
       if (!session.ok) throw new Error(session.status === 401 ? "Ce compte Google n’est pas autorisé." : "Impossible de préparer la connexion Google.");
-      window.location.assign("/api/nylas?action=start");
+      const start = await requestWithTimeout("/api/google?action=start", { method: "POST" });
+      const data = await start.json().catch(() => ({}));
+      if (!start.ok || typeof data.url !== "string") throw new Error(data.error || "Impossible de démarrer la connexion Google.");
+      window.location.assign(data.url);
     } catch (e) {
       setLoading(false);
       setError(e?.code === "auth/popup-closed-by-user" ? "Connexion Google annulée." : e.message || "Connexion Google impossible.");
@@ -596,8 +585,8 @@ function App() {
   async function disconnect() {
     sessionGeneration.current++;
     try {
-      if (account?.via === "nylas") {
-        const r = await fetch("/api/nylas?action=logout", { method: "POST" });
+      if (account?.via === "google") {
+        const r = await fetch("/api/google?action=logout", { method: "POST" });
         if (!r.ok)
           throw new Error("Impossible de déconnecter cet appareil. Réessaie.");
       }
@@ -946,8 +935,8 @@ function App() {
                   Ta messagerie n’est pas connectée. Tes notes et tes tâches
                   restent accessibles.
                 </span>
-                <button onClick={connectNylas}>
-                  Connecter Gmail avec Nylas <ArrowUpRight size={15} />
+                <button onClick={connectGoogle}>
+                  Connecter Google <ArrowUpRight size={15} />
                 </button>
               </div>
             )}
@@ -995,7 +984,7 @@ function App() {
                   ) : (
                     <button
                       className="primary"
-                      onClick={connectNylas}
+                      onClick={connectGoogle}
                       disabled={busyMail || !!account}
                     >
                       Connecter Google
@@ -1005,11 +994,11 @@ function App() {
                 <div className="notice neutral">
                   <strong>Gmail et Google Agenda</strong>
                   <p>
-                    La connexion passe par Google et Nylas. Seule la lecture de
-                    Gmail et des événements Agenda est demandée. La session reste sur cet appareil
+                    La connexion passe directement par Google. Seule la lecture de
+                    Gmail et des événements de votre agenda principal est demandée. La session reste sur cet appareil
                     pendant 30 jours au maximum ; une reconnexion peut être
                     nécessaire. Le bouton Déconnecter ferme la session de cet
-                    appareil, sans retirer l’autorisation dans Nylas.
+                    appareil, sans retirer l’autorisation dans votre compte Google.
                   </p>
                 </div>
                 <div className="settings-row">
@@ -1220,9 +1209,9 @@ function App() {
                             Connectez Gmail pour afficher les messages.{" "}
                             <button
                               className="text-link"
-                              onClick={connectNylas}
+                              onClick={connectGoogle}
                             >
-                              Connecter Gmail avec Nylas{" "}
+                              Connecter Google{" "}
                               <ArrowUpRight size={14} />
                             </button>
                           </div>

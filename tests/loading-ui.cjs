@@ -9,12 +9,13 @@ function click(w,text){const b=[...w.document.querySelectorAll('button')].find(x
   const existing=[{id:'preserved',text:'Une note existante',updatedAt:100}];w.localStorage.setItem('pilotage.notes.v1',JSON.stringify(existing));
   let resolveSession,first=true;w.fetch=async(url)=>{
    if(String(url).startsWith('/api/app-session'))return {ok:true,status:200};
-   if(String(url)==='/api/nylas?action=session'&&first){first=false;return new Promise(r=>{resolveSession=r})}
-   if(String(url)==='/api/nylas?action=session')return {ok:true,status:200,json:async()=>({email:'test@example.test'})};
-   if(String(url).startsWith('/api/nylas?action=messages'))return {ok:true,status:200,json:async()=>({messages:[{id:'fictif',subject:'Message fictif pour QA',from:{emailAddress:{name:'Test'}},receivedDateTime:new Date().toISOString(),bodyPreview:'Fictif',isRead:true}]})};
+   if(String(url)==='/api/google?action=session'&&first){first=false;return new Promise(r=>{resolveSession=r})}
+   if(String(url)==='/api/google?action=session')return {ok:true,status:200,json:async()=>({email:'test@example.test'})};
+   if(String(url).startsWith('/api/google?action=messages'))return {ok:true,status:200,json:async()=>({messages:[{id:'fictif',subject:'Message fictif pour QA',from:{emailAddress:{name:'Test'}},receivedDateTime:new Date().toISOString(),bodyPreview:'Fictif',isRead:true}]})};
+   if(String(url)==='/api/google?action=events')return {ok:true,status:200,json:async()=>({events:[]})};
    return {ok:false,status:401};
   };
-  w.eval(result.outputFiles[0].text);await wait(100);click(w,'Se connecter avec Google');await wait(200);
+  w.eval(result.outputFiles[0].text);await wait(200);
   assert(resolveSession,'requête session non démarrée');assert(w.document.body.textContent.includes('Chargement des e-mails…'));assert(w.document.querySelector('.spinner'));assert(!w.document.body.textContent.includes('Équipe support'));assert(!w.document.body.textContent.includes('Point équipe informatique'));assert(w.document.body.textContent.includes('Une note existante'));
   resolveSession(mode==='connected'?{ok:true,status:200}:mode==='failure'?{ok:false,status:503}:{ok:false,status:401});await wait(200);
   if(mode==='connected'){assert(w.document.body.textContent.includes('Message fictif pour QA'));assert(!w.document.body.textContent.includes('Chargement des e-mails…'))}

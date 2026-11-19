@@ -1,7 +1,7 @@
 import {appSession} from '../server/app-auth.js';
-import {ORIGIN} from '../server/nylas.js';
+import {ORIGIN} from '../server/session.js';
 import { validateDeadline } from '../src/lib/deadline.js';
-import { session as nylasSession, nylas, allowedMessage, parseEmailHours, plain } from '../server/nylas.js';
+import {gmailMessage,allowedMessage,parseEmailHours} from '../server/google.js';
 // Analyse côté serveur. Ne journalise ni jetons, ni courriels, ni réponse du modèle.
 const DOMAIN = 'emmaus-scherwiller.fr';
 const MAX_CHARS = 12000;
@@ -39,15 +39,11 @@ export default async function handler(req, res) {
   const messageId = req.body?.messageId;
   const hours=parseEmailHours(req.body?.hours);
   if(hours===null)return res.status(400).json({error:'Période invalide.'});
-  const ns=nylasSession(req);
-  if (!ns) return res.status(401).json({error:'Connecte Gmail avec Nylas pour analyser tes messages.'});
   if (typeof messageId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(messageId)) return res.status(400).json({error:'Requête invalide.'});
   try {
-    const fetched=await nylas('/v3/grants/'+encodeURIComponent(ns.grant)+'/messages/'+encodeURIComponent(messageId));
-    const m=fetched.data;
+    const m=await gmailMessage(req,res,messageId,'full');
     if(!m||!allowedMessage(m,hours))return res.status(403).json({error:'Ce message ne correspond pas au domaine ou à la période autorisés.'});
-    const body=plain(m.body);
-    const msg={internalDate:String(Number(m.date)*1000),payload:{mimeType:'text/plain',headers:[{name:'from',value:m.from[0].email},{name:'subject',value:String(m.subject||'')},{name:'date',value:new Date(Number(m.date)*1000).toISOString()}],body:{data:Buffer.from(body).toString('base64url')}}};
+    const msg=m;
     const now=Date.now();const previous=(buckets.get(allowedEmail)||[]).filter(t=>now-t<60000);
     if(previous.length>=50)return res.status(429).json({error:'Trop de demandes. Réessayez dans une minute.'});
     buckets.set(allowedEmail,[...previous,now]);
@@ -81,8 +77,8 @@ export default async function handler(req, res) {
     if(typeof output.resume!=='string') return res.status(422).json({code:'AI_INVALID',error:'Gemini a renvoyé une réponse incomplète pour cet e-mail.'});
     return res.status(200).json({resume:output.resume.slice(0,1500),actions:safeList(output.actions),echeances:Array.isArray(output.echeances)?output.echeances.map(d=>validateDeadline(d,content)).filter(d=>d?.description).slice(0,10):[],truncated:textFromPart(msg.payload).length>MAX_CHARS});
   } catch(e) {
-    if (e.status===401 || e.status===403) return res.status(401).json({error:'La connexion Nylas a expiré ou n’est plus valide. Reconnecte Gmail.'});
+    if (e.status===401 || e.status===403) return res.status(401).json({error:'La connexion Google a expiré ou n’est plus valide. Reconnecte ton compte.'});
     if (e.status===429) return res.status(429).json({error:'Trop de demandes. Réessaie plus tard.'});
-    return res.status(502).json({error:'Impossible de récupérer cet e-mail via Nylas. Réessaie plus tard.'});
+    return res.status(502).json({error:'Impossible de récupérer cet e-mail depuis Gmail. Réessaie plus tard.'});
   }
 }

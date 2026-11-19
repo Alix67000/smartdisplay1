@@ -1,7 +1,6 @@
 import {createRemoteJWKSet,jwtVerify} from 'jose';
-import {sign,verify,cookie,cookieValue} from './nylas.js';
-
-export const APP_COOKIE='pilotage_app';
+import {APP_COOKIE,sign,verify,cookie,cookieValue} from './session.js';
+export {APP_COOKIE};
 export const FIREBASE_PROJECT='copilot-app-aa995';
 const keys=createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 const issuer=`https://securetoken.google.com/${FIREBASE_PROJECT}`;
