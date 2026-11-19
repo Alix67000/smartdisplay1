@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import handler from '../api/exchange-rates.js';
 import {appCookie} from '../server/app-auth.js';
 process.env.NYLAS_SESSION_SECRET='test-session-key-long-enough-for-testing';process.env.ALLOWED_GOOGLE_EMAIL='test@example.com';process.env.NAVASAN_API_KEY='une-cle-fictive-pour-le-test';
-const ORIGIN='https://copilot-app-phi.vercel.app';
+const ORIGIN='https://smartdisplay1.vercel.app';
 const cookie=()=>appCookie('uid-test','test@example.com',Math.floor(Date.now()/1000)+3600).split(';')[0];
 function result(){return {code:200,headers:{},setHeader(k,v){this.headers[k]=v},status(code){this.code=code;return this},json(value){this.body=value;return this}}}
 test('API sécurisée et traitement fournisseur fictif',async()=>{

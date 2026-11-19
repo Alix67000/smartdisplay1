@@ -1,7 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual, createHash } from 'node:crypto';
-export const ORIGIN='https://copilot-app-phi.vercel.app';
+export const ORIGIN='https://smartdisplay1.vercel.app';
 export const CALLBACK=ORIGIN+'/api/nylas-callback';
 export const READ_SCOPE='https://www.googleapis.com/auth/gmail.readonly';
+export const CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.events.readonly';
+export const GOOGLE_SCOPES=READ_SCOPE+' '+CALENDAR_SCOPE;
 export const COOKIE='pilotage_nylas';
 export const STATE_COOKIE='pilotage_nylas_state';
 const duration=30*24*3600;
@@ -23,4 +25,4 @@ export const EMAIL_PERIODS=[2,24,48,72];
 export function parseEmailHours(value){if(value===undefined)return 72;const str=String(value);return EMAIL_PERIODS.includes(Number(str))&&/^(2|24|48|72)$/.test(str)?Number(str):null}
 export function allowedMessage(msg,hours=72){const from=msg.from||[];const email=from.length===1&&typeof from[0]?.email==='string'?from[0].email.trim().toLowerCase():'';const date=Number(msg.date)*1000;return email.endsWith('@emmaus-scherwiller.fr')&&Number.isFinite(date)&&date>=Date.now()-hours*60*60*1000&&date<=Date.now()+5*60*1000}
 export function plain(html){return String(html||'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&#39;/gi,"'").replace(/&quot;/gi,'"')}
-export function safeGrant(g){const scopes=Array.isArray(g.scope)?g.scope:[];const identity=['openid','https://www.googleapis.com/auth/userinfo.email','https://www.googleapis.com/auth/userinfo.profile'];return g.provider==='google'&&g.grant_status==='valid'&&String(g.email||'').toLowerCase()===(process.env.ALLOWED_GOOGLE_EMAIL||'').trim().toLowerCase()&&scopes.includes(READ_SCOPE)&&scopes.every(x=>x===READ_SCOPE||identity.includes(x))}
+export function safeGrant(g){const scopes=Array.isArray(g.scope)?g.scope:[];const identity=['openid','https://www.googleapis.com/auth/userinfo.email','https://www.googleapis.com/auth/userinfo.profile'];return g.provider==='google'&&g.grant_status==='valid'&&String(g.email||'').toLowerCase()===(process.env.ALLOWED_GOOGLE_EMAIL||'').trim().toLowerCase()&&scopes.includes(READ_SCOPE)&&scopes.includes(CALENDAR_SCOPE)&&scopes.every(x=>x===READ_SCOPE||x===CALENDAR_SCOPE||identity.includes(x))}

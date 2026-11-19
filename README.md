@@ -16,7 +16,7 @@ Node 20 ou plus : `npm install`, puis `npm run dev` ou `npm run build`. Vite seu
 
 Côté serveur, configurer `NYLAS_API_KEY`, `NYLAS_CLIENT_ID`, `NYLAS_API_URI`, `NYLAS_SESSION_SECRET` (secret indépendant et aléatoire d'au moins 32 caractères), `ALLOWED_GOOGLE_EMAIL`, `NAVASAN_API_KEY`, `GEMINI_API_KEY` et éventuellement `GEMINI_MODEL`. Ne jamais envoyer `.env.local` ou ces secrets dans Git. La clé Gemini de production est configurée dans Vercel. La rotation du secret de session déconnecte les appareils.
 
-Le callback Nylas pour le site actuel est `https://copilot-app-phi.vercel.app/api/nylas-callback`. L'authentification utilise PKCE, un état signé et une session signée dans un cookie HttpOnly/Secure ; la clé Nylas reste côté serveur. Le serveur vérifie le compte, les permissions obtenues, l'expéditeur et la période de chaque message. La limite en mémoire des analyses ne remplace pas une limitation distribuée.
+Le callback Nylas pour le site actuel est `https://smartdisplay1.vercel.app/api/nylas-callback`. L'authentification utilise PKCE, un état signé et une session signée dans un cookie HttpOnly/Secure ; la clé Nylas reste côté serveur. Le serveur vérifie le compte, les permissions obtenues, l'expéditeur et la période de chaque message. La limite en mémoire des analyses ne remplace pas une limitation distribuée.
 
 ## Sécurité des clés
 

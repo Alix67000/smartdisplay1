@@ -36,6 +36,7 @@ import QuickNotes from "./widgets/QuickNotes.jsx";
 import UsefulLinks from "./widgets/UsefulLinks.jsx";
 import WidgetSettings from "./widgets/WidgetSettings.jsx";
 import Loading from "./widgets/Loading.jsx";
+import { connectFirebase, firebaseAuth } from "./lib/firebase-client.js";
 const SyncAccount = React.lazy(() => import("./widgets/SyncAccount.jsx"));
 import {
   readWidgetSettings,
@@ -259,7 +260,8 @@ function App() {
   const analysesRef = useRef(analyses),
     analysisRunning = useRef(false),
     mailRunning = useRef(false),
-    sessionGeneration = useRef(0);
+    sessionGeneration = useRef(0),
+    swipeStart = useRef(null);
   const [loadedHours, setLoadedHours] = useState(widgetSettings.emailHours);
   useEffect(
     () => () => {
@@ -495,12 +497,13 @@ function App() {
     const hours = settingsRef.current.emailHours,
       generation = sessionGeneration.current;
     try {
-      const [sr, mr] = await Promise.all([
+      const [sr, mr, er] = await Promise.all([
         requestWithTimeout("/api/nylas?action=session"),
         requestWithTimeout("/api/nylas?action=messages&hours=" + hours),
+        requestWithTimeout("/api/nylas?action=events"),
       ]);
-      if (!sr.ok || !mr.ok) {
-        if (sr.status === 401 || mr.status === 401) {
+      if (!sr.ok || !mr.ok || !er.ok) {
+        if (sr.status === 401 || mr.status === 401 || er.status === 401) {
           expired = true;
           setGoogleToken(null);
           setAccount(null);
@@ -511,13 +514,14 @@ function App() {
         );
       }
       const profile = await sr.json(),
-        data = await mr.json();
+        data = await mr.json(),
+        calendar = await er.json();
       if (generation !== sessionGeneration.current) return;
       const fetched = Array.isArray(data.messages) ? data.messages : [];
       setMessages(fetched);
       setLoadedHours(hours);
       setMoreMessages(!!data.more);
-      setEvents([]);
+      setEvents(Array.isArray(calendar.events) ? calendar.events : []);
       setAccount({
         provider: "google",
         via: "nylas",
@@ -538,13 +542,55 @@ function App() {
       setLoading(false);
     }
   }
-  function connectNylas() {
+  async function connectNylas() {
     setError("");
     if (account?.provider === "microsoft") {
       setError("Déconnecte d’abord Outlook.");
       return;
     }
-    window.location.assign("/api/nylas?action=start");
+    setLoading(true);
+    try {
+      let user = firebaseAuth.currentUser;
+      if (!user) {
+        const result = await connectFirebase();
+        user = result.user;
+      }
+      const token = await user.getIdToken();
+      const session = await requestWithTimeout("/api/app-session?action=login", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+      });
+      if (!session.ok) throw new Error(session.status === 401 ? "Ce compte Google n’est pas autorisé." : "Impossible de préparer la connexion Google.");
+      window.location.assign("/api/nylas?action=start");
+    } catch (e) {
+      setLoading(false);
+      setError(e?.code === "auth/popup-closed-by-user" ? "Connexion Google annulée." : e.message || "Connexion Google impossible.");
+      setNav("Paramètres");
+    }
+  }
+
+  function onTouchStart(event) {
+    swipeStart.current = null;
+    if (event.touches.length !== 1 || event.target.closest?.("button,a,input,select,textarea,label,[role=button],[contenteditable],[data-no-swipe]")) return;
+    const { identifier, clientX, clientY } = event.touches[0];
+    if (clientX < 24 || clientX > window.innerWidth - 24) return;
+    swipeStart.current = { identifier, x: clientX, y: clientY };
+  }
+  function onTouchMove(event) {
+    const start = swipeStart.current, touch = event.touches[0];
+    if (!start || event.touches.length !== 1 || touch.identifier !== start.identifier) return;
+    const dx = Math.abs(touch.clientX - start.x), dy = Math.abs(touch.clientY - start.y);
+    if (dy >= 12 && dy >= dx) swipeStart.current = null;
+  }
+  function onTouchEnd(event) {
+    const start = swipeStart.current; swipeStart.current = null;
+    if (!start || event.touches.length) return;
+    const touch = Array.from(event.changedTouches).find(x => x.identifier === start.identifier);
+    if (!touch) return;
+    const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 64 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+    if (nav === "Vue d’ensemble" && dx < 0) setNav("Paramètres");
+    else if (nav === "Paramètres" && dx > 0) setNav("Vue d’ensemble");
   }
 
   async function disconnect() {
@@ -756,6 +802,10 @@ function App() {
         "app " +
         (nav === "Vue d’ensemble" ? "dashboard-home" : "dashboard-section")
       }
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={() => { swipeStart.current = null; }}
     >
       <aside className="sidebar">
         <div className="brand">
@@ -917,7 +967,7 @@ function App() {
                     <div className="section-kicker">CONNEXION</div>
                     <h2>Vos comptes</h2>
                     <p>
-                      Connectez Gmail ou Outlook pour consulter vos données. Un
+                      Connectez Google ou Outlook pour consulter vos données. Un
                       seul compte à la fois.
                     </p>
                   </div>
@@ -927,7 +977,7 @@ function App() {
                     <Mail size={20} />
                   </div>
                   <div className="grow">
-                    <strong>Gmail</strong>
+                    <strong>Compte Google</strong>
                     <p>
                       {checkingSession
                         ? "Vérification…"
@@ -948,15 +998,15 @@ function App() {
                       onClick={connectNylas}
                       disabled={busyMail || !!account}
                     >
-                      Connecter Gmail avec Nylas
+                      Connecter Google
                     </button>
                   )}
                 </div>
                 <div className="notice neutral">
-                  <strong>Connexion Gmail avec Nylas</strong>
+                  <strong>Gmail et Google Agenda</strong>
                   <p>
-                    La connexion passe par Nylas et Google. Seule la lecture des
-                    e-mails est demandée. La session reste sur cet appareil
+                    La connexion passe par Google et Nylas. Seule la lecture de
+                    Gmail et des événements Agenda est demandée. La session reste sur cet appareil
                     pendant 30 jours au maximum ; une reconnexion peut être
                     nécessaire. Le bouton Déconnecter ferme la session de cet
                     appareil, sans retirer l’autorisation dans Nylas.

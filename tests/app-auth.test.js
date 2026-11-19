@@ -22,7 +22,7 @@ test('cookie distinct, signé, borné dans le temps et contrôlé sur chaque API
  const app=appCookie('u','owner@example.test',now()+3600).split(';')[0];assert.equal(appSession({headers:{cookie:app}}).uid,'u');assert.equal(appSession({headers:{cookie:app+'x'}}),null);assert.equal(appSession({headers:{cookie:''}}),null);
  let r=response();await nylas({method:'GET',query:{action:'start'},headers:{}},r);assert.equal(r.statusCode,401);
  r=response();await callback({method:'GET',headers:{},query:{}},r);assert.match(r.location,/nylas=session/);
- r=response();await analyze({method:'POST',headers:{origin:'https://copilot-app-phi.vercel.app'},body:{}},r);assert.equal(r.statusCode,401);
+ r=response();await analyze({method:'POST',headers:{origin:'https://smartdisplay1.vercel.app'},body:{}},r);assert.equal(r.statusCode,401);
  r=response();await appSessionHandler({method:'POST',query:{action:'logout'},headers:{origin:'https://evil.test'}},r);assert.equal(r.statusCode,403);
- r=response();await appSessionHandler({method:'POST',query:{action:'logout'},headers:{origin:'https://copilot-app-phi.vercel.app'}},r);assert.equal(r.statusCode,200);assert.ok(r.headers['Set-Cookie'].some(x=>x.startsWith('pilotage_app=;')));
+ r=response();await appSessionHandler({method:'POST',query:{action:'logout'},headers:{origin:'https://smartdisplay1.vercel.app'}},r);assert.equal(r.statusCode,200);assert.ok(r.headers['Set-Cookie'].some(x=>x.startsWith('pilotage_app=;')));
 });
