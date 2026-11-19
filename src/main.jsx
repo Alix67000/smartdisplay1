@@ -1,151 +1,1720 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { PublicClientApplication } from '@azure/msal-browser';
-import { LayoutDashboard, Mail, CalendarDays, CheckSquare, Clock3, Settings, Search, Bell, Plus, ArrowUpRight, ChevronRight, Sparkles, X, Check, RefreshCw, AlertCircle, LogOut, Inbox } from 'lucide-react';
-import './style.css';
-import { importedItems, mergeById } from './lib/automation.js';
-import Weather from './widgets/Weather.jsx';
-import MonthlyCalendar from './widgets/MonthlyCalendar.jsx';
-import ExchangeRates from './widgets/ExchangeRates.jsx';
-import QuickNotes from './widgets/QuickNotes.jsx';
-import UsefulLinks from './widgets/UsefulLinks.jsx';
-import WidgetSettings from './widgets/WidgetSettings.jsx';
-import AppLogin from './widgets/AppLogin.jsx';
-import Loading from './widgets/Loading.jsx';
-const SyncAccount=React.lazy(()=>import('./widgets/SyncAccount.jsx'));
-import {readWidgetSettings,normalizeSettings,SETTINGS_KEY} from './widgets/settings.js';
-import {WEATHER_CITY_KEY,cityIsValid} from './widgets/weather.js';
-const localChanged=()=>window.dispatchEvent(new Event('pilotage-local-change'));
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createRoot } from "react-dom/client";
+import { PublicClientApplication } from "@azure/msal-browser";
+import {
+  LayoutDashboard,
+  Mail,
+  CalendarDays,
+  CheckSquare,
+  Clock3,
+  Settings,
+  Search,
+  Bell,
+  Plus,
+  ArrowUpRight,
+  ChevronRight,
+  Sparkles,
+  X,
+  Check,
+  RefreshCw,
+  AlertCircle,
+  LogOut,
+  Inbox,
+} from "lucide-react";
+import "./style.css";
+import { importedItems, mergeById } from "./lib/automation.js";
+import Weather from "./widgets/Weather.jsx";
+import MonthlyCalendar from "./widgets/MonthlyCalendar.jsx";
+import ExchangeRates from "./widgets/ExchangeRates.jsx";
+import QuickNotes from "./widgets/QuickNotes.jsx";
+import UsefulLinks from "./widgets/UsefulLinks.jsx";
+import WidgetSettings from "./widgets/WidgetSettings.jsx";
+import Loading from "./widgets/Loading.jsx";
+const SyncAccount = React.lazy(() => import("./widgets/SyncAccount.jsx"));
+import {
+  readWidgetSettings,
+  normalizeSettings,
+  SETTINGS_KEY,
+} from "./widgets/settings.js";
+import { WEATHER_CITY_KEY, cityIsValid } from "./widgets/weather.js";
+const localChanged = () =>
+  window.dispatchEvent(new Event("pilotage-local-change"));
 
 const clientId = import.meta.env.VITE_MICROSOFT_CLIENT_ID;
-const tenant = import.meta.env.VITE_MICROSOFT_TENANT_ID || 'organizations';
-const scopes = ['User.Read', 'Mail.Read', 'Calendars.Read'];
-const allowedDomain = 'emmaus-scherwiller.fr';
-const analysisSessionKey = 'pilotage.google.analyses.v2';
-function savedAnalyses(){try{return JSON.parse(sessionStorage.getItem(analysisSessionKey)||'{}')}catch{return {}}}
-function allowedSender(value){const v=(value||'').trim(); const match=v.match(/<\s*([^<>\s]+@[^<>\s]+)\s*>/) || v.match(/^([^<>\s]+@[^<>\s]+)$/); if(!match)return false; const address=match[1].toLowerCase();return address.slice(address.lastIndexOf('@')+1)===allowedDomain;}
-const msal = clientId ? new PublicClientApplication({auth:{clientId,authority:`https://login.microsoftonline.com/${encodeURIComponent(tenant)}`,redirectUri:window.location.origin},cache:{cacheLocation:'sessionStorage'}}) : null;
-const day = new Date();
-const dateISO = d => { const copy = new Date(d); copy.setMinutes(copy.getMinutes()-copy.getTimezoneOffset()); return copy.toISOString().slice(0,10); };
-const addDays = n => {const d = new Date();d.setDate(d.getDate()+n);return dateISO(d)};
-const fmt = (v, opt) => {try{return new Intl.DateTimeFormat('fr-FR',opt).format(new Date(v));}catch{return 'Date inconnue'}};
-const prettyDue = value => {if(!value)return 'Sans échéance'; const now=dateISO(new Date());if(value===now)return "Aujourd’hui";if(value===addDays(1))return 'Demain'; return fmt(value+'T12:00:00',{day:'numeric',month:'short'});};
-const time = value => fmt(value,{hour:'2-digit',minute:'2-digit'});
-const displaySender = v => (v||'Expéditeur inconnu').replace(/\s*<[^>]+>\s*$/, '').replace(/^"|"$/g, '').trim() || v || 'Expéditeur inconnu';
-function loadLocal(key){try{const x=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(x)?x:[]}catch{return []}}
-function loadTasks(){try {const x=localStorage.getItem('pilotage.tasks.v1');return x ? JSON.parse(x) : []} catch{return []}}
-async function requestWithTimeout(url,options={},timeout=15000){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeout);try{return await fetch(url,{...options,signal:controller.signal})}finally{clearTimeout(timer)}}
-async function graph(token,path){const r=await requestWithTimeout('https://graph.microsoft.com/v1.0'+path,{headers:{Authorization:`Bearer ${token}`,Prefer:'outlook.timezone="'+Intl.DateTimeFormat().resolvedOptions().timeZone+'"'}});if(!r.ok)throw new Error(`Microsoft Graph : erreur ${r.status}. Vérifie les autorisations de ton organisation.`);return r.json()}
-function App({logoutApp,logoutBusy}){
- const [widgetSettings,setWidgetSettings]=useState(readWidgetSettings),[widgetSaveError,setWidgetSaveError]=useState(false),[syncStatus,setSyncStatus]=useState('idle');
- const [settingsActionsTarget,setSettingsActionsTarget]=useState(null);
- const settingsRef=useRef(widgetSettings);settingsRef.current=widgetSettings;
- const [weatherCity,setWeatherCity]=useState(()=>{try{const city=JSON.parse(localStorage.getItem(WEATHER_CITY_KEY));return cityIsValid(city)?city:null}catch{return null}});
- function saveSettings(next,city,baseline){
-  // Refuse a stale save even if a storage event has not yet been processed.
-  let oldSettings,oldCity;
-  try{
-   oldSettings=localStorage.getItem(SETTINGS_KEY);oldCity=localStorage.getItem(WEATHER_CITY_KEY);
-   if(oldSettings!==null){const raw=JSON.parse(oldSettings);if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('invalid-saved-settings')}
-   const currentSettings=readWidgetSettings();let currentCity=null;if(oldCity!==null){const v=JSON.parse(oldCity);if(v!==null&&!cityIsValid(v))throw Error('invalid-saved-city');currentCity=v}
-   if(JSON.stringify({settings:currentSettings,city:currentCity})!==JSON.stringify(baseline)){refreshLocal();return {ok:false,message:'Les réglages ont changé ailleurs. Recharge-les avant de les modifier à nouveau.'}}
-   const normalized=normalizeSettings(next);
-   const updateSettings=JSON.stringify(normalized)!==JSON.stringify(currentSettings),updateCity=JSON.stringify(city)!==JSON.stringify(currentCity);
-   if(updateSettings)localStorage.setItem(SETTINGS_KEY,JSON.stringify(normalized));
-   try{if(updateCity){if(city)localStorage.setItem(WEATHER_CITY_KEY,JSON.stringify(city));else localStorage.removeItem(WEATHER_CITY_KEY)}}catch(e){if(updateSettings){try{if(oldSettings===null)localStorage.removeItem(SETTINGS_KEY);else localStorage.setItem(SETTINGS_KEY,oldSettings)}catch{localChanged();return {ok:false,message:'Enregistrement partiel : certains réglages ont peut-être été modifiés. Vérifie les valeurs enregistrées avant de réessayer.'}}}throw e}
-   setWidgetSettings(normalized);setWeatherCity(city);setWidgetSaveError(false);localChanged();return {ok:true};
-  }catch{setWidgetSaveError(true);return {ok:false,message:'Enregistrement impossible. Les modifications restent à l’écran : vérifie le stockage et réessaie.'}}
- }
- function changeWeatherCity(city){setWeatherCity(city);try{localStorage.setItem(WEATHER_CITY_KEY,JSON.stringify(city));setWidgetSaveError(false);localChanged()}catch{setWidgetSaveError(true)}}
- const visible=widgetSettings.visible;
- const [googleToken,setGoogleToken]=useState(null);
- const [localDeadlines,setLocalDeadlines]=useState(()=>loadLocal('pilotage.deadlines.v1'));
- const imports=useRef(new Set(loadLocal('pilotage.imported.v1')));
- const [analyses,setAnalyses]=useState(savedAnalyses);
- const analysesRef=useRef(analyses),analysisRunning=useRef(false),mailRunning=useRef(false),sessionGeneration=useRef(0);
- const [loadedHours,setLoadedHours]=useState(widgetSettings.emailHours);
- useEffect(()=>()=>{sessionGeneration.current++},[]);
- const [weekRunning,setWeekRunning]=useState(false), [progress,setProgress]=useState(null), [moreMessages,setMoreMessages]=useState(false);
- const [nav,setNav]=useState('Vue d’ensemble'), [tasks,setTasks]=useState(loadTasks), [showForm,setShowForm]=useState(false), [title,setTitle]=useState(''), [due,setDue]=useState(''), [category,setCategory]=useState('Support'), [account,setAccount]=useState(null), [messages,setMessages]=useState([]), [events,setEvents]=useState([]), [loading,setLoading]=useState(false), [checkingSession,setCheckingSession]=useState(true), [sessionUnavailable,setSessionUnavailable]=useState(false), [mailError,setMailError]=useState(false), [error,setError]=useState(''), [search,setSearch]=useState('');
- function refreshLocal(){setTasks(loadTasks());setLocalDeadlines(loadLocal('pilotage.deadlines.v1'));imports.current=new Set(loadLocal('pilotage.imported.v1'));setWidgetSettings(readWidgetSettings());try{const c=JSON.parse(localStorage.getItem(WEATHER_CITY_KEY));setWeatherCity(cityIsValid(c)?c:null)}catch{setWeatherCity(null)}window.dispatchEvent(new Event('pilotage-sync-applied'))}
- useEffect(()=>{function otherTab(e){if(['pilotage.tasks.v1','pilotage.deadlines.v1','pilotage.imported.v1','pilotage.widgets.v1',WEATHER_CITY_KEY].includes(e.key))refreshLocal()}window.addEventListener('storage',otherTab);return()=>window.removeEventListener('storage',otherTab)},[]);
- useEffect(()=>{localStorage.setItem('pilotage.tasks.v1',JSON.stringify(tasks));localChanged()},[tasks]);
- useEffect(()=>{localStorage.setItem('pilotage.deadlines.v1',JSON.stringify(localDeadlines));localChanged()},[localDeadlines]);
- useEffect(()=>{try{if(googleToken)sessionStorage.setItem(analysisSessionKey,JSON.stringify(analyses))}catch{}},[analyses,googleToken]);
- useEffect(()=>{let active=true;(async()=>{
-  try{sessionStorage.removeItem('pilotage.google.session.v1')}catch{}
-  const url=new URL(window.location.href);const result=url.searchParams.get('nylas');
-  if(result){url.searchParams.delete('nylas');window.history.replaceState({},'',url.pathname+url.search+url.hash)}
-  try{
-   let sessionFailed=false;
-   try{const r=await requestWithTimeout('/api/nylas?action=session');if(r.ok){setGoogleToken('nylas');await googleSync(false);return}if(r.status!==401)throw Error('session-unavailable')}
-   catch{sessionFailed=true;if(active){setSessionUnavailable(true);setError('Impossible de vérifier la connexion Gmail. Vérifie ta connexion Internet puis actualise la page.')}}
-   if(!sessionFailed&&result==='permissions')setError('La connexion n’a pas été activée : le compte ou les autorisations ne correspondent pas à la lecture seule. Vérifie les autorisations accordées dans Nylas.');
-   else if(!sessionFailed&&result&&result!=='ok'){const details={session:'Session de connexion perdue ou expirée (code SESSION). Relance la connexion dans le même navigateur.',refus:'Autorisation refusée ou annulée (code REFUS).',fournisseur:'Le fournisseur a signalé une erreur (code FOURNISSEUR).',code:'Code d’autorisation manquant ou invalide (code AUTORISATION).',echange:'Échange du code avec Nylas impossible (code ECHANGE).','echange-pkce':'Nylas a refusé la vérification de sécurité (code ECHANGE-PKCE).','echange-code':'Nylas indique que le code est invalide ou expiré (code ECHANGE-CODE).','echange-redirection':'Nylas a refusé la redirection (code ECHANGE-REDIRECTION).','echange-client':'Nylas a refusé la configuration du client (code ECHANGE-CLIENT).','echange-requete':'Nylas a refusé la demande (code ECHANGE-REQUETE).',grant:'Réponse Nylas sans identifiant de connexion valide (code GRANT).',verification:'Vérification de la connexion Nylas impossible (code VERIFICATION).',echec:'La connexion Nylas n’a pas abouti.'};setError(details[result]||'La connexion Nylas n’a pas abouti.')}
-   if(msal){try{await msal.initialize();const a=msal.getAllAccounts()[0];if(a)setAccount({...a,provider:'microsoft'})}catch{setError('Impossible de se connecter à Outlook.')}}
-  }finally{if(active)setCheckingSession(false)}
- })();return()=>{active=false}},[]);
- const sync = useCallback(async a=>{if(!msal||!a)return;setLoading(true);setError('');setMailError(false);try{let token;try{token=(await msal.acquireTokenSilent({account:a,scopes})).accessToken}catch{token=(await msal.acquireTokenPopup({account:a,scopes})).accessToken}const start=new Date();start.setDate(start.getDate()-1);const end=new Date();end.setDate(end.getDate()+14);const [m,e]=await Promise.all([graph(token,'/me/messages?$select=id,subject,from,receivedDateTime,bodyPreview,isRead&$orderby=receivedDateTime%20desc&$top=15'),graph(token,`/me/calendarView?startDateTime=${encodeURIComponent(start.toISOString())}&endDateTime=${encodeURIComponent(end.toISOString())}&$select=id,subject,start,end,location,isAllDay&$orderby=start/dateTime&$top=30`)]);setMessages((m.value||[]).filter(message=>allowedSender(message.from?.emailAddress?.address)));setEvents(e.value||[])}catch(e){setMailError(true);setError(e.message||'La connexion a échoué.')}finally{setLoading(false)}},[]);
- useEffect(()=>{if(account?.provider==='microsoft')sync(account)},[account,sync]);
- async function connect(){if(account?.provider==='google'){setError('Déconnectez d’abord Gmail pour utiliser Outlook.');return}if(!msal){setError('Configure VITE_MICROSOFT_CLIENT_ID dans Vercel ou dans le fichier .env.local avant de te connecter.');setNav('Paramètres');return}setLoading(true);setError('');try{await msal.initialize();let result=await msal.loginPopup({scopes});setAccount({...result.account,provider:'microsoft'})}catch(e){setError('Connexion impossible : '+(e.message||'vérifie la configuration Microsoft.'));}finally{setLoading(false)}}
- async function googleSync(autoAnalyze=false){
-  if(mailRunning.current||analysisRunning.current)return;
-  mailRunning.current=true;setLoading(true);setError('');setMailError(false);let expired=false;
-  const hours=settingsRef.current.emailHours,generation=sessionGeneration.current;
-  try{
-   const [sr,mr]=await Promise.all([requestWithTimeout('/api/nylas?action=session'),requestWithTimeout('/api/nylas?action=messages&hours='+hours)]);
-   if(!sr.ok||!mr.ok){if(sr.status===401||mr.status===401){expired=true;setGoogleToken(null);setAccount(null);throw new Error('La connexion Nylas a expiré. Reconnecte Gmail.')}throw new Error('Impossible de charger les e-mails avec Nylas. Réessaie.')}
-   const profile=await sr.json(),data=await mr.json();if(generation!==sessionGeneration.current)return;
-   const fetched=Array.isArray(data.messages)?data.messages:[];
-   setMessages(fetched);setLoadedHours(hours);setMoreMessages(!!data.more);setEvents([]);setAccount({provider:'google',via:'nylas',name:profile.email.split('@')[0],username:profile.email});setSessionUnavailable(false);
-   setLoading(false);
-   if(autoAnalyze)await analyzeWeek(fetched,hours,generation);
-  }catch(e){if(generation===sessionGeneration.current){setMailError(true);setSessionUnavailable(!expired);setError(e.message||'Impossible de charger les e-mails avec Nylas.')}}finally{mailRunning.current=false;setLoading(false)}
- }
- function connectNylas(){setError('');if(account?.provider==='microsoft'){setError('Déconnecte d’abord Outlook.');return}window.location.assign('/api/nylas?action=start')}
-
- async function disconnect(){sessionGeneration.current++;try{if(account?.via==='nylas'){const r=await fetch('/api/nylas?action=logout',{method:'POST'});if(!r.ok)throw new Error('Impossible de déconnecter cet appareil. Réessaie.')}if(msal&&account?.provider==='microsoft')await msal.logoutPopup({account,mainWindowRedirectUri:window.location.origin});sessionStorage.removeItem('pilotage.google.session.v1');sessionStorage.removeItem(analysisSessionKey);setAccount(null);setGoogleToken(null);analysesRef.current={};setAnalyses({});setProgress(null);setMoreMessages(false);setMessages([]);setEvents([]);setMailError(false);setSessionUnavailable(false)}catch(e){setError(e.message||'Impossible de déconnecter le compte.')}}
- async function getAnalysis(message,hours){const response=await requestWithTimeout('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messageId:message.id,hours})},90000);let data;try{data=await response.json()}catch{throw new Error('Réponse du serveur invalide.')}if(!response.ok){const e=new Error(data.error||'Analyse impossible.');e.code=data.code;e.status=response.status;throw e}return data}
- function importAnalysis(message,data){if(imports.current.has(message.id))return;const items=importedItems(message,data);setTasks(t=>mergeById(t,items.tasks));setLocalDeadlines(d=>mergeById(d,items.deadlines));imports.current.add(message.id);try{localStorage.setItem('pilotage.imported.v1',JSON.stringify([...imports.current]));localChanged()}catch{}}
- async function analyzeWeek(list=messages,hours=loadedHours,generation=sessionGeneration.current){
-  if(analysisRunning.current)return;
-  const pending=list.filter(m=>!analysesRef.current[m.id]);if(!pending.length){setProgress(null);return}
-  analysisRunning.current=true;setWeekRunning(true);setError('');setProgress({done:0,total:pending.length});let done=0;const skipped=[];
-  try{for(const message of pending){
-   if(generation!==sessionGeneration.current)break;
-   try{const data=await getAnalysis(message,hours);if(generation!==sessionGeneration.current)break;importAnalysis(message,data);analysesRef.current={...analysesRef.current,[message.id]:data};setAnalyses(analysesRef.current);done++;setProgress({done,total:pending.length})}
-   catch(e){if(generation!==sessionGeneration.current)break;if(['EMAIL_EMPTY','AI_OUTPUT_LIMIT','AI_BLOCKED','AI_INVALID'].includes(e.code)){skipped.push(e.message);continue}throw e}
+const tenant = import.meta.env.VITE_MICROSOFT_TENANT_ID || "organizations";
+const scopes = ["User.Read", "Mail.Read", "Calendars.Read"];
+const allowedDomain = "emmaus-scherwiller.fr";
+const analysisSessionKey = "pilotage.google.analyses.v2";
+function savedAnalyses() {
+  try {
+    return JSON.parse(sessionStorage.getItem(analysisSessionKey) || "{}");
+  } catch {
+    return {};
   }
-  if(generation===sessionGeneration.current&&skipped.length)setError(`${done} message(s) analysé(s), ${skipped.length} non analysé(s) : ${skipped[0]} Vérifiez-les manuellement ou relancez « Analyser les restants ».`)
-  }catch(e){if(generation===sessionGeneration.current)setError('Analyse interrompue après '+done+' message(s)'+(skipped.length?' ; '+skipped.length+' non analysé(s)':'')+' : '+(e.message||'délai dépassé.')+' Les résultats obtenus restent affichés.')}
-  finally{analysisRunning.current=false;setWeekRunning(false)}
- }
- function addTask(e){e.preventDefault();if(!title.trim())return;setTasks(t=>[{id:crypto.randomUUID(),title:title.trim(),category,due,done:false},...t]);setTitle('');setDue('');setShowForm(false)}
- function toggle(id){setTasks(t=>t.map(x=>x.id===id?{...x,done:!x.done}:x))}
- function remove(id){setTasks(t=>t.filter(x=>x.id!==id))}
- const busyMail=checkingSession||loading;
- const displayMessages=messages;
- const internalEvents=localDeadlines.map(d=>({id:d.id,subject:d.title,start:{dateTime:d.date+'T12:00:00'},end:{dateTime:d.date+'T23:59:59'},isLocal:true,time:d.time,location:{displayName:d.origin+' · générée par IA'}}));
- const displayEvents=[...events,...internalEvents].sort((a,b)=>new Date(a.start?.dateTime)-new Date(b.start?.dateTime));
- const visibleEvents=displayEvents.filter(e=>e.isLocal || new Date(e.end?.dateTime||e.start?.dateTime).getTime()>=Date.now());
- const openTasks=tasks.filter(t=>!t.done), shownTasks=nav==='Échéances'?tasks.filter(t=>t.due&&!t.done).sort((a,b)=>a.due.localeCompare(b.due)):tasks;
- const late=openTasks.filter(t=>t.due&&t.due<dateISO(new Date())).length;
- const filteredMessages=displayMessages.filter(m=>`${m.subject||''} ${m.from?.emailAddress?.name||''}`.toLowerCase().includes(search.toLowerCase()));
- const items=[['Vue d’ensemble',LayoutDashboard],['E-mails',Mail],['Agenda',CalendarDays],['Tâches',CheckSquare],['Échéances',Clock3]];
- const sectionTitle = {'Vue d’ensemble':'Vue d’ensemble','E-mails':'Mes e-mails','Agenda':'Mon agenda','Tâches':'Mes tâches','Échéances':'Mes échéances','Paramètres':'Paramètres'};
- return <div className="app"><aside className="sidebar"><div className="brand"><div className="brand-icon">p<span>.</span></div><div><strong>pilotage<span>.</span></strong><small>ESPACE DE TRAVAIL</small></div></div><div className="side-label">MENU PRINCIPAL</div><nav>{items.map(([name,Icon])=><button key={name} className={'nav-item '+(nav===name?'active':'')} onClick={()=>setNav(name)}><Icon size={18}/><span>{name}</span>{name==='Tâches'&&openTasks.length>0&&<b>{openTasks.length}</b>}</button>)}</nav><div className="side-bottom"><button className={'nav-item '+(nav==='Paramètres'?'active':'')} onClick={()=>setNav('Paramètres')}><Settings size={18}/> Paramètres</button><div className="profile"><div className="avatar">{account?.name?.charAt(0)||'IT'}</div><div><strong>{account?.name||'Mon espace'}</strong><small>Chargé informatique</small></div></div></div></aside><main className="main"><header className="topbar"><div className="breadcrumb">Espace de travail <ChevronRight size={14}/> <strong>{sectionTitle[nav]}</strong></div><div className="header-right"><button className="secondary" onClick={logoutApp} disabled={logoutBusy}>Déconnexion application</button><span className={'status '+(account?'connected':'')}><i/>{busyMail?'Chargement…':account?(account.provider==='google'?'Gmail connecté':'Microsoft connecté'):sessionUnavailable?'Vérification indisponible':'Messagerie non connectée'}</span><button className="icon-button" aria-label="Paramètres" onClick={()=>setNav('Paramètres')}><Settings size={18}/></button><div className="avatar small">{account?.name?.charAt(0)||'IT'}</div></div></header><div className="content"><div className="intro"><div><div className="eyebrow">TON ESPACE DE TRAVAIL <span>✳</span></div><h1>{nav==='Vue d’ensemble'?`Bonjour${account?.name ? ', '+account.name.split(' ')[0] : ''} 👋`:sectionTitle[nav]}</h1><p>{nav==='Vue d’ensemble'?"Voici ce qui se passe dans votre journée.":nav==='Paramètres'?"Configurez votre espace et vos connexions.":'Retrouvez les informations importantes au même endroit.'}</p></div><div className="intro-actions"><span className="today"><CalendarDays size={16}/>{fmt(day,{weekday:'long',day:'numeric',month:'long'})}</span><button className="primary" onClick={()=>setShowForm(true)}><Plus size={17}/> Nouvelle tâche</button></div></div>
- <React.Suspense fallback={null}><SyncAccount visible={nav==='Paramètres'} onApplied={refreshLocal} onStatusChange={setSyncStatus}/></React.Suspense>
- {['connecting','working','waiting'].includes(syncStatus)&&<Loading label={syncStatus==='waiting'?'Synchronisation en attente de connexion…':'Synchronisation de tes données…'} className="sync-loading-banner"/>}
- {error&&<div className="error"><AlertCircle size={17}/><span>{error}</span><button onClick={()=>setError('')} aria-label="Fermer"><X size={16}/></button></div>}
- {!busyMail&&!account&&!sessionUnavailable&&nav!=='Paramètres'&&<div className="demo-banner"><span>Ta messagerie n’est pas connectée. Tes notes et tes tâches restent accessibles.</span><button onClick={connectNylas}>Connecter Gmail avec Nylas <ArrowUpRight size={15}/></button></div>}
- <WidgetSettings shown={nav==='Paramètres'} settings={widgetSettings} city={weatherCity} onSave={saveSettings} saveError={widgetSaveError} actionsTarget={settingsActionsTarget}/>{nav==='Paramètres'?<><section className="card settings-card"><div className="card-head"><div><div className="section-kicker">CONNEXION</div><h2>Vos comptes</h2><p>Connectez Gmail ou Outlook pour consulter vos données. Un seul compte à la fois.</p></div></div><div className="settings-row"><div className="service-icon google-icon"><Mail size={20}/></div><div className="grow"><strong>Gmail</strong><p>{checkingSession?'Vérification…':sessionUnavailable?'Vérification indisponible':account?.provider==='google'?account.username:'Non connecté'}</p></div>{account?.provider==='google'?<button className="secondary" onClick={disconnect}><LogOut size={15}/> Déconnecter</button>:<button className="primary" onClick={connectNylas} disabled={busyMail||!!account}>Connecter Gmail avec Nylas</button>}</div><div className="notice neutral"><strong>Connexion Gmail avec Nylas</strong><p>La connexion passe par Nylas et Google. Seule la lecture des e-mails est demandée. La session reste sur cet appareil pendant 30 jours au maximum ; une reconnexion peut être nécessaire. Le bouton Déconnecter ferme la session de cet appareil, sans retirer l’autorisation dans Nylas.</p></div><div className="settings-row"><div className="service-icon"><Mail size={20}/></div><div className="grow"><strong>Outlook professionnel</strong><p>{checkingSession?'Vérification…':account?.provider==='microsoft'?account.username:'Non connecté'}</p></div>{account?.provider==='microsoft'?<button className="secondary" onClick={disconnect}><LogOut size={15}/> Déconnecter</button>:<button className="primary" onClick={connect} disabled={busyMail||!!account}>Connecter Outlook</button>}</div><div className="notice"><strong>Configuration nécessaire</strong><p>Un administrateur doit enregistrer l’application dans Microsoft Entra ID et autoriser la lecture des e-mails et du calendrier. Consultez le fichier README du projet.</p></div><div className="notice neutral"><strong>Résumé par IA Gemini</strong><p>À configurer sur Vercel avec une clé côté serveur. Après « Actualiser » dans E-mails ou en lançant l’analyse manuellement, les messages concernés sont transmis à Gemini. Vérifiez l’autorisation de votre organisation et les conditions de confidentialité avant utilisation.</p></div><div className="notice neutral"><strong>Stockage des tâches</strong><p>Les tâches et échéances sont enregistrées sur cet appareil et synchronisées avec Firebase si la synchronisation est active.</p></div></section><div ref={setSettingsActionsTarget} className="settings-page-actions"/></>:<>
- {nav==='Vue d’ensemble'&&<>{(visible.statEmails||visible.statAgenda||visible.statTasks||visible.statLate)&&<div className="summary-grid">{visible.statEmails&&<Stat icon={Mail} label="E-mails récents" value={busyMail||!account||mailError?'—':displayMessages.length} sub={account?.provider==='google'?`${loadedHours} dernières heures · Emmaüs`:'Expéditeurs @emmaus-scherwiller.fr'} tone="purple"/>}{visible.statAgenda&&<Stat icon={CalendarDays} label="Rendez-vous à venir" value={busyMail||(mailError&&account?.provider==='microsoft')?'—':visibleEvents.length} sub="Agenda de l’application" tone="blue"/>}{visible.statTasks&&<Stat icon={CheckSquare} label="Tâches en cours" value={openTasks.length} sub="À garder à l’œil" tone="orange"/>}{visible.statLate&&<Stat icon={Clock3} label="Échéances dépassées" value={late} sub={late?'À traiter en priorité':'Tout est à jour'} tone="green"/>}</div>}{visible.weather&&<Weather city={weatherCity} onCityChange={changeWeatherCity} unit={widgetSettings.weatherUnit} refreshMinutes={widgetSettings.weatherRefresh}/ >}{visible.exchangeRates&&<ExchangeRates/>}{visible.monthlyCalendar&&<MonthlyCalendar deadlines={localDeadlines} tasks={tasks} events={events} outlook={account?.provider==='microsoft'} loading={busyMail} syncStatus={syncStatus} onOpenAgenda={()=>setNav('Agenda')} onOpenTasks={()=>setNav('Tâches')}/ >}{visible.notes&&<QuickNotes/>}{visible.usefulLinks&&<UsefulLinks/>}{visible.briefing&&<section className="card weekly-card"><div className="card-head"><div><div className="section-kicker">BRIEFING INTELLIGENT</div><h2>Résumé des {loadedHours} dernières heures <span className="count">{busyMail||!account||mailError?'—':account.provider==='google'?messages.length:0}</span></h2><p>Messages reçus sur les {loadedHours} dernières heures depuis @emmaus-scherwiller.fr</p></div>{account?.provider==='google'&&<button className="primary" onClick={()=>analyzeWeek()} disabled={loading||weekRunning||!messages.some(m=>!analyses[m.id])}><Sparkles size={15}/>{weekRunning?'Analyse en cours…':Object.keys(analyses).length?'Analyser les restants':`Analyser les ${loadedHours} heures`}</button>}</div><div className="weekly-body"><div className="privacy-note">Après « Actualiser » ou en lançant l’analyse, le contenu des messages est envoyé à Google Gemini. Vérifiez que votre organisation l’autorise. Les actions et dates reconnues sont ajoutées localement aux tâches et à l’agenda. Résultats IA à vérifier.</div>{busyMail?<Loading label="Chargement des messages…" className="weekly-empty"/>:sessionUnavailable?<div className="weekly-empty">Impossible de vérifier la connexion à la messagerie.</div>:!account?<div className="weekly-empty">Connectez Gmail pour afficher les messages. <button className="text-link" onClick={connectNylas}>Connecter Gmail avec Nylas <ArrowUpRight size={14}/></button></div>:account?.provider!=='google'?<div className="weekly-empty">La synthèse IA est disponible avec Gmail.</div>:mailError?<div className="weekly-empty">Chargement des messages impossible. Consulte le message d’erreur ci-dessus.</div>:messages.length===0?<div className="weekly-empty">Aucun e-mail Emmaüs trouvé sur la période récupérée.</div>:<><div className="weekly-status">{progress&&weekRunning?`${progress.done} / ${progress.total} analyses effectuées`:`${messages.length} e-mail${messages.length>1?'s':''} reçu${messages.length>1?'s':''} sur les ${loadedHours} dernières heures · ${messages.filter(m=>analyses[m.id]).length} résumé${messages.filter(m=>analyses[m.id]).length>1?'s':''} disponible${messages.filter(m=>analyses[m.id]).length>1?'s':''}`} {moreMessages&&<strong>· Limite de 50 messages atteinte : tous les messages ne sont pas inclus.</strong>}</div>{messages.some(m=>analyses[m.id])&&<div className="weekly-digest"><h3>En résumé</h3><ol>{messages.filter(m=>analyses[m.id]).map(m=><li key={m.id}><strong>{displaySender(m.from?.emailAddress?.name)}</strong> — {analyses[m.id].resume}{analyses[m.id].truncated&&<small> · message tronqué</small>}</li>)}</ol>{messages.some(m=>analyses[m.id]?.actions?.length>0)&&<><h3>Actions à faire</h3><ul>{messages.filter(m=>analyses[m.id]).flatMap(m=>analyses[m.id].actions.map((x,i)=><li key={m.id+'a'+i}>{x} <span>— {displaySender(m.from?.emailAddress?.name)}</span></li>))}</ul></>}{messages.some(m=>analyses[m.id]?.echeances?.length>0)&&<><h3>Échéances à retenir</h3><ul>{messages.filter(m=>analyses[m.id]).flatMap(m=>analyses[m.id].echeances.map((x,i)=><li key={m.id+'d'+i}>{typeof x==='string'?x:x.description} <span>— {displaySender(m.from?.emailAddress?.name)}{typeof x==='object'&&!x.date?' · date à vérifier':typeof x==='object'?' · date reconnue':''}</span></li>))}</ul></>}<small>Résumés générés par IA : vérifiez les informations importantes dans les e-mails d’origine.</small></div>}</>}</div></section>}</>}
- {((nav==='Vue d’ensemble'&&(visible.emails||visible.agenda))||nav==='E-mails'||nav==='Agenda')&&<div className={'columns '+(nav!=='Vue d’ensemble'||!visible.emails||!visible.agenda?'single':'')}>{((nav==='Vue d’ensemble'&&visible.emails)||nav==='E-mails')&&<section className="card"><div className="card-head"><div><div className="section-kicker">VOTRE BOÎTE DE RÉCEPTION</div><h2>E-mails récents</h2><p>Expéditeurs @emmaus-scherwiller.fr {account?.provider==='google'?`· ${loadedHours} dernières heures`:''}</p></div>{nav==='Vue d’ensemble'?<button className="text-link" onClick={()=>setNav('E-mails')}>Voir tout <ArrowUpRight size={15}/></button>:account&&<button className="secondary" onClick={()=>account.provider==='google'?googleSync(true):sync(account)} disabled={loading||weekRunning}><RefreshCw size={15}/> Actualiser</button>}</div>{nav==='E-mails'&&<div className="search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher dans les messages chargés"/></div>}<div className="list">{busyMail&&<Loading label="Chargement des e-mails…" className="empty"/>}{!busyMail&&filteredMessages.slice(0,nav==='Vue d’ensemble'?3:50).map(m=><div className="mail-row" key={m.id}><div className={'mail-avatar '+(!m.isRead?'unread':'')}>{(m.from?.emailAddress?.name||'?').charAt(0).toUpperCase()}</div><div className="mail-body"><div className="row-top"><strong>{m.from?.emailAddress?.name||'Expéditeur inconnu'}</strong><time>{fmt(m.receivedDateTime,{day:'numeric',month:'short'})}</time></div><div className="mail-subject">{m.subject||'(Sans objet)'}</div><p>{m.bodyPreview||'Aucun aperçu disponible.'}</p></div>{!m.isRead&&<span className="unread-dot"/>}</div>)}{!busyMail&&!filteredMessages.length&&<Empty text={sessionUnavailable?"Impossible de vérifier la connexion à la messagerie.":!account?"Connecte ta messagerie pour voir tes e-mails.":mailError?"Impossible de charger les e-mails.":"Aucun e-mail à afficher."}/>}</div></section>}
- {((nav==='Vue d’ensemble'&&visible.agenda)||nav==='Agenda')&&<section className="card"><div className="card-head"><div><div className="section-kicker">À VENIR</div><h2>Mon agenda</h2><p>{account?.provider==='google'?'Échéances locales · Google Agenda non connecté':'Échéances locales et rendez-vous'}</p></div>{nav==='Vue d’ensemble'&&<button className="text-link" onClick={()=>setNav('Agenda')}>Voir tout <ArrowUpRight size={15}/></button>}</div><div className="event-list">{visibleEvents.slice(0,nav==='Vue d’ensemble'?3:50).map(e=><div className="event-row" key={e.id}><div className="event-date"><strong>{fmt(e.start?.dateTime,{day:'2-digit'})}</strong><span>{fmt(e.start?.dateTime,{month:'short'}).replace('.','')}</span></div><div className="event-info"><strong>{e.subject||'(Sans titre)'}</strong><span><Clock3 size={13}/> {e.isLocal?(e.time?'À '+e.time:'Toute la journée'):time(e.start?.dateTime)+' – '+time(e.end?.dateTime)}</span><small>{e.location?.displayName||'Sans lieu indiqué'}</small></div>{e.isLocal?<button className="remove" aria-label="Supprimer l’échéance" onClick={()=>setLocalDeadlines(d=>d.filter(x=>x.id!==e.id))}><X size={15}/></button>:<ChevronRight size={16} className="chevron"/>}</div>)}{busyMail&&!visibleEvents.length?<Loading label="Chargement de l’agenda…" className="empty"/>:!visibleEvents.length&&<Empty text="Aucun rendez-vous à venir."/>}</div><div className="calendar-note"><CalendarDays size={16}/> Échéances internes · synchronisation selon les paramètres</div></section>}</div>}
- {((nav==='Vue d’ensemble'&&visible.tasks)||nav==='Tâches'||nav==='Échéances')&&<section className="card task-card"><div className="card-head"><div><div className="section-kicker">RESTEZ ORGANISÉ</div><h2>{nav==='Échéances'?'Échéances à suivre':'Mes tâches'} <span className="count">{openTasks.length}</span></h2><p>{nav==='Échéances'?'Vos tâches avec une date limite.':'Vos priorités, au même endroit.'}</p></div><button className="text-link" onClick={()=>nav==='Vue d’ensemble'?setNav('Tâches'):setShowForm(true)}>{nav==='Vue d’ensemble'?'Voir toutes les tâches':'Ajouter une tâche'} <ArrowUpRight size={15}/></button></div><div className="task-list">{shownTasks.slice(0,nav==='Vue d’ensemble'?4:100).map(t=><div className={'task-row '+(t.done?'done':'')} key={t.id}><button className={'checkbox '+(t.done?'checked':'')} onClick={()=>toggle(t.id)} aria-label={t.done?'Marquer comme à faire':'Marquer comme terminée'}>{t.done&&<Check size={13}/>}</button><span className="task-title">{t.title}{t.origin&&<small className="task-origin">{t.origin} · générée par IA</small>}</span><span className="category">{t.category}</span><span className={'due '+(t.due&&t.due<dateISO(new Date())&&!t.done?'overdue':'')}><Clock3 size={14}/> {prettyDue(t.due)}</span><button className="remove" onClick={()=>remove(t.id)} aria-label="Supprimer la tâche"><X size={15}/></button></div>)}{shownTasks.length===0&&<div className="empty-task"><CheckSquare size={21}/><div><strong>Tout est clair pour le moment</strong><p>Ajoutez votre première tâche pour commencer à vous organiser.</p></div><button className="secondary" onClick={()=>setShowForm(true)}><Plus size={15}/> Ajouter</button></div>}</div></section>}
- </>}<footer><span>Votre espace, en toute simplicité.</span><span>POSTE DE PILOTAGE · V1</span></footer></div></main>
- {showForm&&<div className="modal-overlay" onClick={()=>setShowForm(false)}><form className="modal" onSubmit={addTask} onClick={e=>e.stopPropagation()}><div className="modal-head"><div><div className="section-kicker">ORGANISATION</div><h2>Nouvelle tâche</h2></div><button type="button" className="icon-button" onClick={()=>setShowForm(false)} aria-label="Fermer"><X size={19}/></button></div><label>Intitulé<input autoFocus required maxLength={150} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex. Vérifier les sauvegardes"/></label><label>Catégorie<select value={category} onChange={e=>setCategory(e.target.value)}><option>Support</option><option>Infrastructure</option><option>Administration</option><option>Projet</option><option>Autre</option></select></label><label>Échéance <span>(facultatif)</span><input type="date" value={due} onChange={e=>setDue(e.target.value)}/></label><div className="modal-actions"><button type="button" className="secondary" onClick={()=>setShowForm(false)}>Annuler</button><button className="primary" type="submit">Créer la tâche</button></div></form></div>}</div>
 }
-function Stat({icon:Icon,label,value,sub,tone}){return <div className="stat"><div className="stat-top"><span className={'stat-icon '+tone}><Icon size={19}/></span><ArrowUpRight size={15} className="stat-arrow"/></div><div className="stat-value">{value}</div><div className="stat-label">{label}</div><div className="stat-sub">{sub}</div></div>}
-function Empty({text}){return <div className="empty"><Inbox size={23}/>{text}</div>}
-createRoot(document.getElementById('root')).render(<AppLogin>{({logout,busy})=><App logoutApp={logout} logoutBusy={busy}/>}</AppLogin>);
+function allowedSender(value) {
+  const v = (value || "").trim();
+  const match =
+    v.match(/<\s*([^<>\s]+@[^<>\s]+)\s*>/) || v.match(/^([^<>\s]+@[^<>\s]+)$/);
+  if (!match) return false;
+  const address = match[1].toLowerCase();
+  return address.slice(address.lastIndexOf("@") + 1) === allowedDomain;
+}
+const msal = clientId
+  ? new PublicClientApplication({
+      auth: {
+        clientId,
+        authority: `https://login.microsoftonline.com/${encodeURIComponent(tenant)}`,
+        redirectUri: window.location.origin,
+      },
+      cache: { cacheLocation: "sessionStorage" },
+    })
+  : null;
+const day = new Date();
+const dateISO = (d) => {
+  const copy = new Date(d);
+  copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset());
+  return copy.toISOString().slice(0, 10);
+};
+const addDays = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return dateISO(d);
+};
+const fmt = (v, opt) => {
+  try {
+    return new Intl.DateTimeFormat("fr-FR", opt).format(new Date(v));
+  } catch {
+    return "Date inconnue";
+  }
+};
+const prettyDue = (value) => {
+  if (!value) return "Sans échéance";
+  const now = dateISO(new Date());
+  if (value === now) return "Aujourd’hui";
+  if (value === addDays(1)) return "Demain";
+  return fmt(value + "T12:00:00", { day: "numeric", month: "short" });
+};
+const time = (value) => fmt(value, { hour: "2-digit", minute: "2-digit" });
+const displaySender = (v) =>
+  (v || "Expéditeur inconnu")
+    .replace(/\s*<[^>]+>\s*$/, "")
+    .replace(/^"|"$/g, "")
+    .trim() ||
+  v ||
+  "Expéditeur inconnu";
+function loadLocal(key) {
+  try {
+    const x = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(x) ? x : [];
+  } catch {
+    return [];
+  }
+}
+function loadTasks() {
+  try {
+    const x = localStorage.getItem("pilotage.tasks.v1");
+    return x ? JSON.parse(x) : [];
+  } catch {
+    return [];
+  }
+}
+async function requestWithTimeout(url, options = {}, timeout = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function graph(token, path) {
+  const r = await requestWithTimeout(
+    "https://graph.microsoft.com/v1.0" + path,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Prefer:
+          'outlook.timezone="' +
+          Intl.DateTimeFormat().resolvedOptions().timeZone +
+          '"',
+      },
+    },
+  );
+  if (!r.ok)
+    throw new Error(
+      `Microsoft Graph : erreur ${r.status}. Vérifie les autorisations de ton organisation.`,
+    );
+  return r.json();
+}
+function App() {
+  const [widgetSettings, setWidgetSettings] = useState(readWidgetSettings),
+    [widgetSaveError, setWidgetSaveError] = useState(false),
+    [syncStatus, setSyncStatus] = useState("idle");
+  const [settingsActionsTarget, setSettingsActionsTarget] = useState(null);
+  const settingsRef = useRef(widgetSettings);
+  settingsRef.current = widgetSettings;
+  const [weatherCity, setWeatherCity] = useState(() => {
+    try {
+      const city = JSON.parse(localStorage.getItem(WEATHER_CITY_KEY));
+      return cityIsValid(city) ? city : null;
+    } catch {
+      return null;
+    }
+  });
+  function saveSettings(next, city, baseline) {
+    // Refuse a stale save even if a storage event has not yet been processed.
+    let oldSettings, oldCity;
+    try {
+      oldSettings = localStorage.getItem(SETTINGS_KEY);
+      oldCity = localStorage.getItem(WEATHER_CITY_KEY);
+      if (oldSettings !== null) {
+        const raw = JSON.parse(oldSettings);
+        if (!raw || typeof raw !== "object" || Array.isArray(raw))
+          throw Error("invalid-saved-settings");
+      }
+      const currentSettings = readWidgetSettings();
+      let currentCity = null;
+      if (oldCity !== null) {
+        const v = JSON.parse(oldCity);
+        if (v !== null && !cityIsValid(v)) throw Error("invalid-saved-city");
+        currentCity = v;
+      }
+      if (
+        JSON.stringify({ settings: currentSettings, city: currentCity }) !==
+        JSON.stringify(baseline)
+      ) {
+        refreshLocal();
+        return {
+          ok: false,
+          message:
+            "Les réglages ont changé ailleurs. Recharge-les avant de les modifier à nouveau.",
+        };
+      }
+      const normalized = normalizeSettings(next);
+      const updateSettings =
+          JSON.stringify(normalized) !== JSON.stringify(currentSettings),
+        updateCity = JSON.stringify(city) !== JSON.stringify(currentCity);
+      if (updateSettings)
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized));
+      try {
+        if (updateCity) {
+          if (city)
+            localStorage.setItem(WEATHER_CITY_KEY, JSON.stringify(city));
+          else localStorage.removeItem(WEATHER_CITY_KEY);
+        }
+      } catch (e) {
+        if (updateSettings) {
+          try {
+            if (oldSettings === null) localStorage.removeItem(SETTINGS_KEY);
+            else localStorage.setItem(SETTINGS_KEY, oldSettings);
+          } catch {
+            localChanged();
+            return {
+              ok: false,
+              message:
+                "Enregistrement partiel : certains réglages ont peut-être été modifiés. Vérifie les valeurs enregistrées avant de réessayer.",
+            };
+          }
+        }
+        throw e;
+      }
+      setWidgetSettings(normalized);
+      setWeatherCity(city);
+      setWidgetSaveError(false);
+      localChanged();
+      return { ok: true };
+    } catch {
+      setWidgetSaveError(true);
+      return {
+        ok: false,
+        message:
+          "Enregistrement impossible. Les modifications restent à l’écran : vérifie le stockage et réessaie.",
+      };
+    }
+  }
+  function changeWeatherCity(city) {
+    setWeatherCity(city);
+    try {
+      localStorage.setItem(WEATHER_CITY_KEY, JSON.stringify(city));
+      setWidgetSaveError(false);
+      localChanged();
+    } catch {
+      setWidgetSaveError(true);
+    }
+  }
+  const visible = widgetSettings.visible;
+  const [googleToken, setGoogleToken] = useState(null);
+  const [localDeadlines, setLocalDeadlines] = useState(() =>
+    loadLocal("pilotage.deadlines.v1"),
+  );
+  const imports = useRef(new Set(loadLocal("pilotage.imported.v1")));
+  const [analyses, setAnalyses] = useState(savedAnalyses);
+  const analysesRef = useRef(analyses),
+    analysisRunning = useRef(false),
+    mailRunning = useRef(false),
+    sessionGeneration = useRef(0);
+  const [loadedHours, setLoadedHours] = useState(widgetSettings.emailHours);
+  useEffect(
+    () => () => {
+      sessionGeneration.current++;
+    },
+    [],
+  );
+  const [weekRunning, setWeekRunning] = useState(false),
+    [progress, setProgress] = useState(null),
+    [moreMessages, setMoreMessages] = useState(false);
+  const [nav, setNav] = useState("Vue d’ensemble"),
+    [tasks, setTasks] = useState(loadTasks),
+    [showForm, setShowForm] = useState(false),
+    [title, setTitle] = useState(""),
+    [due, setDue] = useState(""),
+    [category, setCategory] = useState("Support"),
+    [account, setAccount] = useState(null),
+    [messages, setMessages] = useState([]),
+    [events, setEvents] = useState([]),
+    [loading, setLoading] = useState(false),
+    [checkingSession, setCheckingSession] = useState(true),
+    [sessionUnavailable, setSessionUnavailable] = useState(false),
+    [mailError, setMailError] = useState(false),
+    [error, setError] = useState(""),
+    [search, setSearch] = useState("");
+  function refreshLocal() {
+    setTasks(loadTasks());
+    setLocalDeadlines(loadLocal("pilotage.deadlines.v1"));
+    imports.current = new Set(loadLocal("pilotage.imported.v1"));
+    setWidgetSettings(readWidgetSettings());
+    try {
+      const c = JSON.parse(localStorage.getItem(WEATHER_CITY_KEY));
+      setWeatherCity(cityIsValid(c) ? c : null);
+    } catch {
+      setWeatherCity(null);
+    }
+    window.dispatchEvent(new Event("pilotage-sync-applied"));
+  }
+  useEffect(() => {
+    function otherTab(e) {
+      if (
+        [
+          "pilotage.tasks.v1",
+          "pilotage.deadlines.v1",
+          "pilotage.imported.v1",
+          "pilotage.widgets.v1",
+          WEATHER_CITY_KEY,
+        ].includes(e.key)
+      )
+        refreshLocal();
+    }
+    window.addEventListener("storage", otherTab);
+    return () => window.removeEventListener("storage", otherTab);
+  }, []);
+  useEffect(() => {
+    localStorage.setItem("pilotage.tasks.v1", JSON.stringify(tasks));
+    localChanged();
+  }, [tasks]);
+  useEffect(() => {
+    localStorage.setItem(
+      "pilotage.deadlines.v1",
+      JSON.stringify(localDeadlines),
+    );
+    localChanged();
+  }, [localDeadlines]);
+  useEffect(() => {
+    try {
+      if (googleToken)
+        sessionStorage.setItem(analysisSessionKey, JSON.stringify(analyses));
+    } catch {}
+  }, [analyses, googleToken]);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        sessionStorage.removeItem("pilotage.google.session.v1");
+      } catch {}
+      const url = new URL(window.location.href);
+      const result = url.searchParams.get("nylas");
+      if (result) {
+        url.searchParams.delete("nylas");
+        window.history.replaceState(
+          {},
+          "",
+          url.pathname + url.search + url.hash,
+        );
+      }
+      try {
+        let sessionFailed = false;
+        try {
+          const r = await requestWithTimeout("/api/nylas?action=session");
+          if (r.ok) {
+            setGoogleToken("nylas");
+            await googleSync(false);
+            return;
+          }
+          if (r.status !== 401) throw Error("session-unavailable");
+        } catch {
+          sessionFailed = true;
+          if (active) {
+            setSessionUnavailable(true);
+            setError(
+              "Impossible de vérifier la connexion Gmail. Vérifie ta connexion Internet puis actualise la page.",
+            );
+          }
+        }
+        if (!sessionFailed && result === "permissions")
+          setError(
+            "La connexion n’a pas été activée : le compte ou les autorisations ne correspondent pas à la lecture seule. Vérifie les autorisations accordées dans Nylas.",
+          );
+        else if (!sessionFailed && result && result !== "ok") {
+          const details = {
+            session:
+              "Session de connexion perdue ou expirée (code SESSION). Relance la connexion dans le même navigateur.",
+            refus: "Autorisation refusée ou annulée (code REFUS).",
+            fournisseur:
+              "Le fournisseur a signalé une erreur (code FOURNISSEUR).",
+            code: "Code d’autorisation manquant ou invalide (code AUTORISATION).",
+            echange: "Échange du code avec Nylas impossible (code ECHANGE).",
+            "echange-pkce":
+              "Nylas a refusé la vérification de sécurité (code ECHANGE-PKCE).",
+            "echange-code":
+              "Nylas indique que le code est invalide ou expiré (code ECHANGE-CODE).",
+            "echange-redirection":
+              "Nylas a refusé la redirection (code ECHANGE-REDIRECTION).",
+            "echange-client":
+              "Nylas a refusé la configuration du client (code ECHANGE-CLIENT).",
+            "echange-requete":
+              "Nylas a refusé la demande (code ECHANGE-REQUETE).",
+            grant:
+              "Réponse Nylas sans identifiant de connexion valide (code GRANT).",
+            verification:
+              "Vérification de la connexion Nylas impossible (code VERIFICATION).",
+            echec: "La connexion Nylas n’a pas abouti.",
+          };
+          setError(details[result] || "La connexion Nylas n’a pas abouti.");
+        }
+        if (msal) {
+          try {
+            await msal.initialize();
+            const a = msal.getAllAccounts()[0];
+            if (a) setAccount({ ...a, provider: "microsoft" });
+          } catch {
+            setError("Impossible de se connecter à Outlook.");
+          }
+        }
+      } finally {
+        if (active) setCheckingSession(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+  const sync = useCallback(async (a) => {
+    if (!msal || !a) return;
+    setLoading(true);
+    setError("");
+    setMailError(false);
+    try {
+      let token;
+      try {
+        token = (await msal.acquireTokenSilent({ account: a, scopes }))
+          .accessToken;
+      } catch {
+        token = (await msal.acquireTokenPopup({ account: a, scopes }))
+          .accessToken;
+      }
+      const start = new Date();
+      start.setDate(start.getDate() - 1);
+      const end = new Date();
+      end.setDate(end.getDate() + 14);
+      const [m, e] = await Promise.all([
+        graph(
+          token,
+          "/me/messages?$select=id,subject,from,receivedDateTime,bodyPreview,isRead&$orderby=receivedDateTime%20desc&$top=15",
+        ),
+        graph(
+          token,
+          `/me/calendarView?startDateTime=${encodeURIComponent(start.toISOString())}&endDateTime=${encodeURIComponent(end.toISOString())}&$select=id,subject,start,end,location,isAllDay&$orderby=start/dateTime&$top=30`,
+        ),
+      ]);
+      setMessages(
+        (m.value || []).filter((message) =>
+          allowedSender(message.from?.emailAddress?.address),
+        ),
+      );
+      setEvents(e.value || []);
+    } catch (e) {
+      setMailError(true);
+      setError(e.message || "La connexion a échoué.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (account?.provider === "microsoft") sync(account);
+  }, [account, sync]);
+  async function connect() {
+    if (account?.provider === "google") {
+      setError("Déconnectez d’abord Gmail pour utiliser Outlook.");
+      return;
+    }
+    if (!msal) {
+      setError(
+        "Configure VITE_MICROSOFT_CLIENT_ID dans Vercel ou dans le fichier .env.local avant de te connecter.",
+      );
+      setNav("Paramètres");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await msal.initialize();
+      let result = await msal.loginPopup({ scopes });
+      setAccount({ ...result.account, provider: "microsoft" });
+    } catch (e) {
+      setError(
+        "Connexion impossible : " +
+          (e.message || "vérifie la configuration Microsoft."),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function googleSync(autoAnalyze = false) {
+    if (mailRunning.current || analysisRunning.current) return;
+    mailRunning.current = true;
+    setLoading(true);
+    setError("");
+    setMailError(false);
+    let expired = false;
+    const hours = settingsRef.current.emailHours,
+      generation = sessionGeneration.current;
+    try {
+      const [sr, mr] = await Promise.all([
+        requestWithTimeout("/api/nylas?action=session"),
+        requestWithTimeout("/api/nylas?action=messages&hours=" + hours),
+      ]);
+      if (!sr.ok || !mr.ok) {
+        if (sr.status === 401 || mr.status === 401) {
+          expired = true;
+          setGoogleToken(null);
+          setAccount(null);
+          throw new Error("La connexion Nylas a expiré. Reconnecte Gmail.");
+        }
+        throw new Error(
+          "Impossible de charger les e-mails avec Nylas. Réessaie.",
+        );
+      }
+      const profile = await sr.json(),
+        data = await mr.json();
+      if (generation !== sessionGeneration.current) return;
+      const fetched = Array.isArray(data.messages) ? data.messages : [];
+      setMessages(fetched);
+      setLoadedHours(hours);
+      setMoreMessages(!!data.more);
+      setEvents([]);
+      setAccount({
+        provider: "google",
+        via: "nylas",
+        name: profile.email.split("@")[0],
+        username: profile.email,
+      });
+      setSessionUnavailable(false);
+      setLoading(false);
+      if (autoAnalyze) await analyzeWeek(fetched, hours, generation);
+    } catch (e) {
+      if (generation === sessionGeneration.current) {
+        setMailError(true);
+        setSessionUnavailable(!expired);
+        setError(e.message || "Impossible de charger les e-mails avec Nylas.");
+      }
+    } finally {
+      mailRunning.current = false;
+      setLoading(false);
+    }
+  }
+  function connectNylas() {
+    setError("");
+    if (account?.provider === "microsoft") {
+      setError("Déconnecte d’abord Outlook.");
+      return;
+    }
+    window.location.assign("/api/nylas?action=start");
+  }
+
+  async function disconnect() {
+    sessionGeneration.current++;
+    try {
+      if (account?.via === "nylas") {
+        const r = await fetch("/api/nylas?action=logout", { method: "POST" });
+        if (!r.ok)
+          throw new Error("Impossible de déconnecter cet appareil. Réessaie.");
+      }
+      if (msal && account?.provider === "microsoft")
+        await msal.logoutPopup({
+          account,
+          mainWindowRedirectUri: window.location.origin,
+        });
+      sessionStorage.removeItem("pilotage.google.session.v1");
+      sessionStorage.removeItem(analysisSessionKey);
+      setAccount(null);
+      setGoogleToken(null);
+      analysesRef.current = {};
+      setAnalyses({});
+      setProgress(null);
+      setMoreMessages(false);
+      setMessages([]);
+      setEvents([]);
+      setMailError(false);
+      setSessionUnavailable(false);
+    } catch (e) {
+      setError(e.message || "Impossible de déconnecter le compte.");
+    }
+  }
+  async function getAnalysis(message, hours) {
+    const response = await requestWithTimeout(
+      "/api/analyze",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId: message.id, hours }),
+      },
+      90000,
+    );
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Réponse du serveur invalide.");
+    }
+    if (!response.ok) {
+      const e = new Error(data.error || "Analyse impossible.");
+      e.code = data.code;
+      e.status = response.status;
+      throw e;
+    }
+    return data;
+  }
+  function importAnalysis(message, data) {
+    if (imports.current.has(message.id)) return;
+    const items = importedItems(message, data);
+    setTasks((t) => mergeById(t, items.tasks));
+    setLocalDeadlines((d) => mergeById(d, items.deadlines));
+    imports.current.add(message.id);
+    try {
+      localStorage.setItem(
+        "pilotage.imported.v1",
+        JSON.stringify([...imports.current]),
+      );
+      localChanged();
+    } catch {}
+  }
+  async function analyzeWeek(
+    list = messages,
+    hours = loadedHours,
+    generation = sessionGeneration.current,
+  ) {
+    if (analysisRunning.current) return;
+    const pending = list.filter((m) => !analysesRef.current[m.id]);
+    if (!pending.length) {
+      setProgress(null);
+      return;
+    }
+    analysisRunning.current = true;
+    setWeekRunning(true);
+    setError("");
+    setProgress({ done: 0, total: pending.length });
+    let done = 0;
+    const skipped = [];
+    try {
+      for (const message of pending) {
+        if (generation !== sessionGeneration.current) break;
+        try {
+          const data = await getAnalysis(message, hours);
+          if (generation !== sessionGeneration.current) break;
+          importAnalysis(message, data);
+          analysesRef.current = { ...analysesRef.current, [message.id]: data };
+          setAnalyses(analysesRef.current);
+          done++;
+          setProgress({ done, total: pending.length });
+        } catch (e) {
+          if (generation !== sessionGeneration.current) break;
+          if (
+            [
+              "EMAIL_EMPTY",
+              "AI_OUTPUT_LIMIT",
+              "AI_BLOCKED",
+              "AI_INVALID",
+            ].includes(e.code)
+          ) {
+            skipped.push(e.message);
+            continue;
+          }
+          throw e;
+        }
+      }
+      if (generation === sessionGeneration.current && skipped.length)
+        setError(
+          `${done} message(s) analysé(s), ${skipped.length} non analysé(s) : ${skipped[0]} Vérifiez-les manuellement ou relancez « Analyser les restants ».`,
+        );
+    } catch (e) {
+      if (generation === sessionGeneration.current)
+        setError(
+          "Analyse interrompue après " +
+            done +
+            " message(s)" +
+            (skipped.length ? " ; " + skipped.length + " non analysé(s)" : "") +
+            " : " +
+            (e.message || "délai dépassé.") +
+            " Les résultats obtenus restent affichés.",
+        );
+    } finally {
+      analysisRunning.current = false;
+      setWeekRunning(false);
+    }
+  }
+  function addTask(e) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setTasks((t) => [
+      {
+        id: crypto.randomUUID(),
+        title: title.trim(),
+        category,
+        due,
+        done: false,
+      },
+      ...t,
+    ]);
+    setTitle("");
+    setDue("");
+    setShowForm(false);
+  }
+  function toggle(id) {
+    setTasks((t) => t.map((x) => (x.id === id ? { ...x, done: !x.done } : x)));
+  }
+  function remove(id) {
+    setTasks((t) => t.filter((x) => x.id !== id));
+  }
+  const busyMail = checkingSession || loading;
+  const displayMessages = messages;
+  const internalEvents = localDeadlines.map((d) => ({
+    id: d.id,
+    subject: d.title,
+    start: { dateTime: d.date + "T12:00:00" },
+    end: { dateTime: d.date + "T23:59:59" },
+    isLocal: true,
+    time: d.time,
+    location: { displayName: d.origin + " · générée par IA" },
+  }));
+  const displayEvents = [...events, ...internalEvents].sort(
+    (a, b) => new Date(a.start?.dateTime) - new Date(b.start?.dateTime),
+  );
+  const visibleEvents = displayEvents.filter(
+    (e) =>
+      e.isLocal ||
+      new Date(e.end?.dateTime || e.start?.dateTime).getTime() >= Date.now(),
+  );
+  const openTasks = tasks.filter((t) => !t.done),
+    shownTasks =
+      nav === "Échéances"
+        ? tasks
+            .filter((t) => t.due && !t.done)
+            .sort((a, b) => a.due.localeCompare(b.due))
+        : tasks;
+  const late = openTasks.filter(
+    (t) => t.due && t.due < dateISO(new Date()),
+  ).length;
+  const filteredMessages = displayMessages.filter((m) =>
+    `${m.subject || ""} ${m.from?.emailAddress?.name || ""}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+  const items = [
+    ["Vue d’ensemble", LayoutDashboard],
+    ["E-mails", Mail],
+    ["Agenda", CalendarDays],
+    ["Tâches", CheckSquare],
+    ["Échéances", Clock3],
+  ];
+  const sectionTitle = {
+    "Vue d’ensemble": "Vue d’ensemble",
+    "E-mails": "Mes e-mails",
+    Agenda: "Mon agenda",
+    Tâches: "Mes tâches",
+    Échéances: "Mes échéances",
+    Paramètres: "Paramètres",
+  };
+  return (
+    <div
+      className={
+        "app " +
+        (nav === "Vue d’ensemble" ? "dashboard-home" : "dashboard-section")
+      }
+    >
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-icon">
+            p<span>.</span>
+          </div>
+          <div>
+            <strong>
+              pilotage<span>.</span>
+            </strong>
+            <small>ESPACE DE TRAVAIL</small>
+          </div>
+        </div>
+        <div className="side-label">MENU PRINCIPAL</div>
+        <nav>
+          {items.map(([name, Icon]) => (
+            <button
+              key={name}
+              className={"nav-item " + (nav === name ? "active" : "")}
+              onClick={() => setNav(name)}
+            >
+              <Icon size={18} />
+              <span>{name}</span>
+              {name === "Tâches" && openTasks.length > 0 && (
+                <b>{openTasks.length}</b>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="side-bottom">
+          <button
+            className={"nav-item " + (nav === "Paramètres" ? "active" : "")}
+            onClick={() => setNav("Paramètres")}
+          >
+            <Settings size={18} /> Paramètres
+          </button>
+          <div className="profile">
+            <div className="avatar">{account?.name?.charAt(0) || "IT"}</div>
+            <div>
+              <strong>{account?.name || "Mon espace"}</strong>
+              <small>Chargé informatique</small>
+            </div>
+          </div>
+        </div>
+      </aside>
+      <main className="main">
+        <header className="topbar">
+          <div className="breadcrumb">
+            Espace de travail <ChevronRight size={14} />{" "}
+            <strong>{sectionTitle[nav]}</strong>
+          </div>
+          <div className="header-right">
+            <span className={"status " + (account ? "connected" : "")}>
+              <i />
+              {busyMail
+                ? "Chargement…"
+                : account
+                  ? account.provider === "google"
+                    ? "Gmail connecté"
+                    : "Microsoft connecté"
+                  : sessionUnavailable
+                    ? "Vérification indisponible"
+                    : "Messagerie non connectée"}
+            </span>
+            <button
+              className="icon-button"
+              aria-label="Paramètres"
+              onClick={() => setNav("Paramètres")}
+            >
+              <Settings size={18} />
+            </button>
+            <div className="avatar small">
+              {account?.name?.charAt(0) || "IT"}
+            </div>
+          </div>
+        </header>
+        <div className="content">
+          <div className="intro">
+            <div>
+              <div className="eyebrow">
+                TON ESPACE DE TRAVAIL <span>✳</span>
+              </div>
+              <h1>
+                {nav === "Vue d’ensemble"
+                  ? `Bonjour${account?.name ? ", " + account.name.split(" ")[0] : ""} 👋`
+                  : sectionTitle[nav]}
+              </h1>
+              <p>
+                {nav === "Vue d’ensemble"
+                  ? "Voici ce qui se passe dans votre journée."
+                  : nav === "Paramètres"
+                    ? "Configurez votre espace et vos connexions."
+                    : "Retrouvez les informations importantes au même endroit."}
+              </p>
+            </div>
+            <div className="intro-actions">
+              <span className="today">
+                <CalendarDays size={16} />
+                {fmt(day, { weekday: "long", day: "numeric", month: "long" })}
+              </span>
+              <button className="primary" onClick={() => setShowForm(true)}>
+                <Plus size={17} /> Nouvelle tâche
+              </button>
+            </div>
+          </div>
+          <React.Suspense fallback={null}>
+            <SyncAccount
+              visible={nav === "Paramètres"}
+              onApplied={refreshLocal}
+              onStatusChange={setSyncStatus}
+            />
+          </React.Suspense>
+          {["connecting", "working", "waiting"].includes(syncStatus) && (
+            <Loading
+              label={
+                syncStatus === "waiting"
+                  ? "Synchronisation en attente de connexion…"
+                  : "Synchronisation de tes données…"
+              }
+              className="sync-loading-banner"
+            />
+          )}
+          {error && (
+            <div className="error">
+              <AlertCircle size={17} />
+              <span>{error}</span>
+              <button onClick={() => setError("")} aria-label="Fermer">
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          {!busyMail &&
+            !account &&
+            !sessionUnavailable &&
+            nav !== "Paramètres" && (
+              <div className="demo-banner">
+                <span>
+                  Ta messagerie n’est pas connectée. Tes notes et tes tâches
+                  restent accessibles.
+                </span>
+                <button onClick={connectNylas}>
+                  Connecter Gmail avec Nylas <ArrowUpRight size={15} />
+                </button>
+              </div>
+            )}
+          <WidgetSettings
+            shown={nav === "Paramètres"}
+            settings={widgetSettings}
+            city={weatherCity}
+            onSave={saveSettings}
+            saveError={widgetSaveError}
+            actionsTarget={settingsActionsTarget}
+          />
+          {nav === "Paramètres" ? (
+            <>
+              <section className="card settings-card">
+                <div className="card-head">
+                  <div>
+                    <div className="section-kicker">CONNEXION</div>
+                    <h2>Vos comptes</h2>
+                    <p>
+                      Connectez Gmail ou Outlook pour consulter vos données. Un
+                      seul compte à la fois.
+                    </p>
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div className="service-icon google-icon">
+                    <Mail size={20} />
+                  </div>
+                  <div className="grow">
+                    <strong>Gmail</strong>
+                    <p>
+                      {checkingSession
+                        ? "Vérification…"
+                        : sessionUnavailable
+                          ? "Vérification indisponible"
+                          : account?.provider === "google"
+                            ? account.username
+                            : "Non connecté"}
+                    </p>
+                  </div>
+                  {account?.provider === "google" ? (
+                    <button className="secondary" onClick={disconnect}>
+                      <LogOut size={15} /> Déconnecter
+                    </button>
+                  ) : (
+                    <button
+                      className="primary"
+                      onClick={connectNylas}
+                      disabled={busyMail || !!account}
+                    >
+                      Connecter Gmail avec Nylas
+                    </button>
+                  )}
+                </div>
+                <div className="notice neutral">
+                  <strong>Connexion Gmail avec Nylas</strong>
+                  <p>
+                    La connexion passe par Nylas et Google. Seule la lecture des
+                    e-mails est demandée. La session reste sur cet appareil
+                    pendant 30 jours au maximum ; une reconnexion peut être
+                    nécessaire. Le bouton Déconnecter ferme la session de cet
+                    appareil, sans retirer l’autorisation dans Nylas.
+                  </p>
+                </div>
+                <div className="settings-row">
+                  <div className="service-icon">
+                    <Mail size={20} />
+                  </div>
+                  <div className="grow">
+                    <strong>Outlook professionnel</strong>
+                    <p>
+                      {checkingSession
+                        ? "Vérification…"
+                        : account?.provider === "microsoft"
+                          ? account.username
+                          : "Non connecté"}
+                    </p>
+                  </div>
+                  {account?.provider === "microsoft" ? (
+                    <button className="secondary" onClick={disconnect}>
+                      <LogOut size={15} /> Déconnecter
+                    </button>
+                  ) : (
+                    <button
+                      className="primary"
+                      onClick={connect}
+                      disabled={busyMail || !!account}
+                    >
+                      Connecter Outlook
+                    </button>
+                  )}
+                </div>
+                <div className="notice">
+                  <strong>Configuration nécessaire</strong>
+                  <p>
+                    Un administrateur doit enregistrer l’application dans
+                    Microsoft Entra ID et autoriser la lecture des e-mails et du
+                    calendrier. Consultez le fichier README du projet.
+                  </p>
+                </div>
+                <div className="notice neutral">
+                  <strong>Résumé par IA Gemini</strong>
+                  <p>
+                    À configurer sur Vercel avec une clé côté serveur. Après «
+                    Actualiser » dans E-mails ou en lançant l’analyse
+                    manuellement, les messages concernés sont transmis à Gemini.
+                    Vérifiez l’autorisation de votre organisation et les
+                    conditions de confidentialité avant utilisation.
+                  </p>
+                </div>
+                <div className="notice neutral">
+                  <strong>Stockage des tâches</strong>
+                  <p>
+                    Les tâches et échéances sont enregistrées sur cet appareil
+                    et synchronisées avec Firebase si la synchronisation est
+                    active.
+                  </p>
+                </div>
+              </section>
+              <div
+                ref={setSettingsActionsTarget}
+                className="settings-page-actions"
+              />
+            </>
+          ) : (
+            <>
+              {nav === "Vue d’ensemble" && (
+                <>
+                  {(visible.statEmails ||
+                    visible.statAgenda ||
+                    visible.statTasks ||
+                    visible.statLate) && (
+                    <div className="summary-grid">
+                      {visible.statEmails && (
+                        <Stat
+                          icon={Mail}
+                          label="E-mails récents"
+                          value={
+                            busyMail || !account || mailError
+                              ? "—"
+                              : displayMessages.length
+                          }
+                          sub={
+                            account?.provider === "google"
+                              ? `${loadedHours} dernières heures · Emmaüs`
+                              : "Expéditeurs @emmaus-scherwiller.fr"
+                          }
+                          tone="purple"
+                        />
+                      )}
+                      {visible.statAgenda && (
+                        <Stat
+                          icon={CalendarDays}
+                          label="Rendez-vous à venir"
+                          value={
+                            busyMail ||
+                            (mailError && account?.provider === "microsoft")
+                              ? "—"
+                              : visibleEvents.length
+                          }
+                          sub="Agenda de l’application"
+                          tone="blue"
+                        />
+                      )}
+                      {visible.statTasks && (
+                        <Stat
+                          icon={CheckSquare}
+                          label="Tâches en cours"
+                          value={openTasks.length}
+                          sub="À garder à l’œil"
+                          tone="orange"
+                        />
+                      )}
+                      {visible.statLate && (
+                        <Stat
+                          icon={Clock3}
+                          label="Échéances dépassées"
+                          value={late}
+                          sub={
+                            late ? "À traiter en priorité" : "Tout est à jour"
+                          }
+                          tone="green"
+                        />
+                      )}
+                    </div>
+                  )}
+                  {visible.weather && (
+                    <Weather
+                      city={weatherCity}
+                      onCityChange={changeWeatherCity}
+                      unit={widgetSettings.weatherUnit}
+                      refreshMinutes={widgetSettings.weatherRefresh}
+                    />
+                  )}
+                  {visible.exchangeRates && <ExchangeRates />}
+                  {visible.monthlyCalendar && (
+                    <MonthlyCalendar
+                      deadlines={localDeadlines}
+                      tasks={tasks}
+                      events={events}
+                      outlook={account?.provider === "microsoft"}
+                      loading={busyMail}
+                      syncStatus={syncStatus}
+                      onOpenAgenda={() => setNav("Agenda")}
+                      onOpenTasks={() => setNav("Tâches")}
+                    />
+                  )}
+                  {visible.notes && <QuickNotes />}
+                  {visible.usefulLinks && <UsefulLinks />}
+                  {visible.briefing && (
+                    <section className="card weekly-card">
+                      <div className="card-head">
+                        <div>
+                          <div className="section-kicker">
+                            BRIEFING INTELLIGENT
+                          </div>
+                          <h2>
+                            Résumé des {loadedHours} dernières heures{" "}
+                            <span className="count">
+                              {busyMail || !account || mailError
+                                ? "—"
+                                : account.provider === "google"
+                                  ? messages.length
+                                  : 0}
+                            </span>
+                          </h2>
+                          <p>
+                            Messages reçus sur les {loadedHours} dernières
+                            heures depuis @emmaus-scherwiller.fr
+                          </p>
+                        </div>
+                        {account?.provider === "google" && (
+                          <button
+                            className="primary"
+                            onClick={() => analyzeWeek()}
+                            disabled={
+                              loading ||
+                              weekRunning ||
+                              !messages.some((m) => !analyses[m.id])
+                            }
+                          >
+                            <Sparkles size={15} />
+                            {weekRunning
+                              ? "Analyse en cours…"
+                              : Object.keys(analyses).length
+                                ? "Analyser les restants"
+                                : `Analyser les ${loadedHours} heures`}
+                          </button>
+                        )}
+                      </div>
+                      <div className="weekly-body">
+                        <div className="privacy-note">
+                          Après « Actualiser » ou en lançant l’analyse, le
+                          contenu des messages est envoyé à Google Gemini.
+                          Vérifiez que votre organisation l’autorise. Les
+                          actions et dates reconnues sont ajoutées localement
+                          aux tâches et à l’agenda. Résultats IA à vérifier.
+                        </div>
+                        {busyMail ? (
+                          <Loading
+                            label="Chargement des messages…"
+                            className="weekly-empty"
+                          />
+                        ) : sessionUnavailable ? (
+                          <div className="weekly-empty">
+                            Impossible de vérifier la connexion à la messagerie.
+                          </div>
+                        ) : !account ? (
+                          <div className="weekly-empty">
+                            Connectez Gmail pour afficher les messages.{" "}
+                            <button
+                              className="text-link"
+                              onClick={connectNylas}
+                            >
+                              Connecter Gmail avec Nylas{" "}
+                              <ArrowUpRight size={14} />
+                            </button>
+                          </div>
+                        ) : account?.provider !== "google" ? (
+                          <div className="weekly-empty">
+                            La synthèse IA est disponible avec Gmail.
+                          </div>
+                        ) : mailError ? (
+                          <div className="weekly-empty">
+                            Chargement des messages impossible. Consulte le
+                            message d’erreur ci-dessus.
+                          </div>
+                        ) : messages.length === 0 ? (
+                          <div className="weekly-empty">
+                            Aucun e-mail Emmaüs trouvé sur la période récupérée.
+                          </div>
+                        ) : (
+                          <>
+                            <div className="weekly-status">
+                              {progress && weekRunning
+                                ? `${progress.done} / ${progress.total} analyses effectuées`
+                                : `${messages.length} e-mail${messages.length > 1 ? "s" : ""} reçu${messages.length > 1 ? "s" : ""} sur les ${loadedHours} dernières heures · ${messages.filter((m) => analyses[m.id]).length} résumé${messages.filter((m) => analyses[m.id]).length > 1 ? "s" : ""} disponible${messages.filter((m) => analyses[m.id]).length > 1 ? "s" : ""}`}{" "}
+                              {moreMessages && (
+                                <strong>
+                                  · Limite de 50 messages atteinte : tous les
+                                  messages ne sont pas inclus.
+                                </strong>
+                              )}
+                            </div>
+                            {messages.some((m) => analyses[m.id]) && (
+                              <div className="weekly-digest">
+                                <h3>En résumé</h3>
+                                <ol>
+                                  {messages
+                                    .filter((m) => analyses[m.id])
+                                    .map((m) => (
+                                      <li key={m.id}>
+                                        <strong>
+                                          {displaySender(
+                                            m.from?.emailAddress?.name,
+                                          )}
+                                        </strong>{" "}
+                                        — {analyses[m.id].resume}
+                                        {analyses[m.id].truncated && (
+                                          <small> · message tronqué</small>
+                                        )}
+                                      </li>
+                                    ))}
+                                </ol>
+                                {messages.some(
+                                  (m) => analyses[m.id]?.actions?.length > 0,
+                                ) && (
+                                  <>
+                                    <h3>Actions à faire</h3>
+                                    <ul>
+                                      {messages
+                                        .filter((m) => analyses[m.id])
+                                        .flatMap((m) =>
+                                          analyses[m.id].actions.map((x, i) => (
+                                            <li key={m.id + "a" + i}>
+                                              {x}{" "}
+                                              <span>
+                                                —{" "}
+                                                {displaySender(
+                                                  m.from?.emailAddress?.name,
+                                                )}
+                                              </span>
+                                            </li>
+                                          )),
+                                        )}
+                                    </ul>
+                                  </>
+                                )}
+                                {messages.some(
+                                  (m) => analyses[m.id]?.echeances?.length > 0,
+                                ) && (
+                                  <>
+                                    <h3>Échéances à retenir</h3>
+                                    <ul>
+                                      {messages
+                                        .filter((m) => analyses[m.id])
+                                        .flatMap((m) =>
+                                          analyses[m.id].echeances.map(
+                                            (x, i) => (
+                                              <li key={m.id + "d" + i}>
+                                                {typeof x === "string"
+                                                  ? x
+                                                  : x.description}{" "}
+                                                <span>
+                                                  —{" "}
+                                                  {displaySender(
+                                                    m.from?.emailAddress?.name,
+                                                  )}
+                                                  {typeof x === "object" &&
+                                                  !x.date
+                                                    ? " · date à vérifier"
+                                                    : typeof x === "object"
+                                                      ? " · date reconnue"
+                                                      : ""}
+                                                </span>
+                                              </li>
+                                            ),
+                                          ),
+                                        )}
+                                    </ul>
+                                  </>
+                                )}
+                                <small>
+                                  Résumés générés par IA : vérifiez les
+                                  informations importantes dans les e-mails
+                                  d’origine.
+                                </small>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </section>
+                  )}
+                </>
+              )}
+              {((nav === "Vue d’ensemble" &&
+                (visible.emails || visible.agenda)) ||
+                nav === "E-mails" ||
+                nav === "Agenda") && (
+                <div
+                  className={
+                    "columns " +
+                    (nav !== "Vue d’ensemble" ||
+                    !visible.emails ||
+                    !visible.agenda
+                      ? "single"
+                      : "")
+                  }
+                >
+                  {((nav === "Vue d’ensemble" && visible.emails) ||
+                    nav === "E-mails") && (
+                    <section className="card">
+                      <div className="card-head">
+                        <div>
+                          <div className="section-kicker">
+                            VOTRE BOÎTE DE RÉCEPTION
+                          </div>
+                          <h2>E-mails récents</h2>
+                          <p>
+                            Expéditeurs @emmaus-scherwiller.fr{" "}
+                            {account?.provider === "google"
+                              ? `· ${loadedHours} dernières heures`
+                              : ""}
+                          </p>
+                        </div>
+                        {nav === "Vue d’ensemble" ? (
+                          <button
+                            className="text-link"
+                            onClick={() => setNav("E-mails")}
+                          >
+                            Voir tout <ArrowUpRight size={15} />
+                          </button>
+                        ) : (
+                          account && (
+                            <button
+                              className="secondary"
+                              onClick={() =>
+                                account.provider === "google"
+                                  ? googleSync(true)
+                                  : sync(account)
+                              }
+                              disabled={loading || weekRunning}
+                            >
+                              <RefreshCw size={15} /> Actualiser
+                            </button>
+                          )
+                        )}
+                      </div>
+                      {nav === "E-mails" && (
+                        <div className="search">
+                          <Search size={17} />
+                          <input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Rechercher dans les messages chargés"
+                          />
+                        </div>
+                      )}
+                      <div className="list">
+                        {busyMail && (
+                          <Loading
+                            label="Chargement des e-mails…"
+                            className="empty"
+                          />
+                        )}
+                        {!busyMail &&
+                          filteredMessages
+                            .slice(0, nav === "Vue d’ensemble" ? 3 : 50)
+                            .map((m) => (
+                              <div className="mail-row" key={m.id}>
+                                <div
+                                  className={
+                                    "mail-avatar " + (!m.isRead ? "unread" : "")
+                                  }
+                                >
+                                  {(m.from?.emailAddress?.name || "?")
+                                    .charAt(0)
+                                    .toUpperCase()}
+                                </div>
+                                <div className="mail-body">
+                                  <div className="row-top">
+                                    <strong>
+                                      {m.from?.emailAddress?.name ||
+                                        "Expéditeur inconnu"}
+                                    </strong>
+                                    <time>
+                                      {fmt(m.receivedDateTime, {
+                                        day: "numeric",
+                                        month: "short",
+                                      })}
+                                    </time>
+                                  </div>
+                                  <div className="mail-subject">
+                                    {m.subject || "(Sans objet)"}
+                                  </div>
+                                  <p>
+                                    {m.bodyPreview ||
+                                      "Aucun aperçu disponible."}
+                                  </p>
+                                </div>
+                                {!m.isRead && <span className="unread-dot" />}
+                              </div>
+                            ))}
+                        {!busyMail && !filteredMessages.length && (
+                          <Empty
+                            text={
+                              sessionUnavailable
+                                ? "Impossible de vérifier la connexion à la messagerie."
+                                : !account
+                                  ? "Connecte ta messagerie pour voir tes e-mails."
+                                  : mailError
+                                    ? "Impossible de charger les e-mails."
+                                    : "Aucun e-mail à afficher."
+                            }
+                          />
+                        )}
+                      </div>
+                    </section>
+                  )}
+                  {((nav === "Vue d’ensemble" && visible.agenda) ||
+                    nav === "Agenda") && (
+                    <section className="card">
+                      <div className="card-head">
+                        <div>
+                          <div className="section-kicker">À VENIR</div>
+                          <h2>Mon agenda</h2>
+                          <p>
+                            {account?.provider === "google"
+                              ? "Échéances locales · Google Agenda non connecté"
+                              : "Échéances locales et rendez-vous"}
+                          </p>
+                        </div>
+                        {nav === "Vue d’ensemble" && (
+                          <button
+                            className="text-link"
+                            onClick={() => setNav("Agenda")}
+                          >
+                            Voir tout <ArrowUpRight size={15} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="event-list">
+                        {visibleEvents
+                          .slice(0, nav === "Vue d’ensemble" ? 3 : 50)
+                          .map((e) => (
+                            <div className="event-row" key={e.id}>
+                              <div className="event-date">
+                                <strong>
+                                  {fmt(e.start?.dateTime, { day: "2-digit" })}
+                                </strong>
+                                <span>
+                                  {fmt(e.start?.dateTime, {
+                                    month: "short",
+                                  }).replace(".", "")}
+                                </span>
+                              </div>
+                              <div className="event-info">
+                                <strong>{e.subject || "(Sans titre)"}</strong>
+                                <span>
+                                  <Clock3 size={13} />{" "}
+                                  {e.isLocal
+                                    ? e.time
+                                      ? "À " + e.time
+                                      : "Toute la journée"
+                                    : time(e.start?.dateTime) +
+                                      " – " +
+                                      time(e.end?.dateTime)}
+                                </span>
+                                <small>
+                                  {e.location?.displayName ||
+                                    "Sans lieu indiqué"}
+                                </small>
+                              </div>
+                              {e.isLocal ? (
+                                <button
+                                  className="remove"
+                                  aria-label="Supprimer l’échéance"
+                                  onClick={() =>
+                                    setLocalDeadlines((d) =>
+                                      d.filter((x) => x.id !== e.id),
+                                    )
+                                  }
+                                >
+                                  <X size={15} />
+                                </button>
+                              ) : (
+                                <ChevronRight size={16} className="chevron" />
+                              )}
+                            </div>
+                          ))}
+                        {busyMail && !visibleEvents.length ? (
+                          <Loading
+                            label="Chargement de l’agenda…"
+                            className="empty"
+                          />
+                        ) : (
+                          !visibleEvents.length && (
+                            <Empty text="Aucun rendez-vous à venir." />
+                          )
+                        )}
+                      </div>
+                      <div className="calendar-note">
+                        <CalendarDays size={16} /> Échéances internes ·
+                        synchronisation selon les paramètres
+                      </div>
+                    </section>
+                  )}
+                </div>
+              )}
+              {((nav === "Vue d’ensemble" && visible.tasks) ||
+                nav === "Tâches" ||
+                nav === "Échéances") && (
+                <section className="card task-card">
+                  <div className="card-head">
+                    <div>
+                      <div className="section-kicker">RESTEZ ORGANISÉ</div>
+                      <h2>
+                        {nav === "Échéances"
+                          ? "Échéances à suivre"
+                          : "Mes tâches"}{" "}
+                        <span className="count">{openTasks.length}</span>
+                      </h2>
+                      <p>
+                        {nav === "Échéances"
+                          ? "Vos tâches avec une date limite."
+                          : "Vos priorités, au même endroit."}
+                      </p>
+                    </div>
+                    <button
+                      className="text-link"
+                      onClick={() =>
+                        nav === "Vue d’ensemble"
+                          ? setNav("Tâches")
+                          : setShowForm(true)
+                      }
+                    >
+                      {nav === "Vue d’ensemble"
+                        ? "Voir toutes les tâches"
+                        : "Ajouter une tâche"}{" "}
+                      <ArrowUpRight size={15} />
+                    </button>
+                  </div>
+                  <div className="task-list">
+                    {shownTasks
+                      .slice(0, nav === "Vue d’ensemble" ? 4 : 100)
+                      .map((t) => (
+                        <div
+                          className={"task-row " + (t.done ? "done" : "")}
+                          key={t.id}
+                        >
+                          <button
+                            className={"checkbox " + (t.done ? "checked" : "")}
+                            onClick={() => toggle(t.id)}
+                            aria-label={
+                              t.done
+                                ? "Marquer comme à faire"
+                                : "Marquer comme terminée"
+                            }
+                          >
+                            {t.done && <Check size={13} />}
+                          </button>
+                          <span className="task-title">
+                            {t.title}
+                            {t.origin && (
+                              <small className="task-origin">
+                                {t.origin} · générée par IA
+                              </small>
+                            )}
+                          </span>
+                          <span className="category">{t.category}</span>
+                          <span
+                            className={
+                              "due " +
+                              (t.due && t.due < dateISO(new Date()) && !t.done
+                                ? "overdue"
+                                : "")
+                            }
+                          >
+                            <Clock3 size={14} /> {prettyDue(t.due)}
+                          </span>
+                          <button
+                            className="remove"
+                            onClick={() => remove(t.id)}
+                            aria-label="Supprimer la tâche"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      ))}
+                    {shownTasks.length === 0 && (
+                      <div className="empty-task">
+                        <CheckSquare size={21} />
+                        <div>
+                          <strong>Tout est clair pour le moment</strong>
+                          <p>
+                            Ajoutez votre première tâche pour commencer à vous
+                            organiser.
+                          </p>
+                        </div>
+                        <button
+                          className="secondary"
+                          onClick={() => setShowForm(true)}
+                        >
+                          <Plus size={15} /> Ajouter
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+          <footer>
+            <span>Votre espace, en toute simplicité.</span>
+            <span>POSTE DE PILOTAGE · V1</span>
+          </footer>
+        </div>
+      </main>
+      {showForm && (
+        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+          <form
+            className="modal"
+            onSubmit={addTask}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <div className="section-kicker">ORGANISATION</div>
+                <h2>Nouvelle tâche</h2>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setShowForm(false)}
+                aria-label="Fermer"
+              >
+                <X size={19} />
+              </button>
+            </div>
+            <label>
+              Intitulé
+              <input
+                autoFocus
+                required
+                maxLength={150}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Ex. Vérifier les sauvegardes"
+              />
+            </label>
+            <label>
+              Catégorie
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option>Support</option>
+                <option>Infrastructure</option>
+                <option>Administration</option>
+                <option>Projet</option>
+                <option>Autre</option>
+              </select>
+            </label>
+            <label>
+              Échéance <span>(facultatif)</span>
+              <input
+                type="date"
+                value={due}
+                onChange={(e) => setDue(e.target.value)}
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setShowForm(false)}
+              >
+                Annuler
+              </button>
+              <button className="primary" type="submit">
+                Créer la tâche
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+function Stat({ icon: Icon, label, value, sub, tone }) {
+  return (
+    <div className="stat">
+      <div className="stat-top">
+        <span className={"stat-icon " + tone}>
+          <Icon size={19} />
+        </span>
+        <ArrowUpRight size={15} className="stat-arrow" />
+      </div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
+      <div className="stat-sub">{sub}</div>
+    </div>
+  );
+}
+function Empty({ text }) {
+  return (
+    <div className="empty">
+      <Inbox size={23} />
+      {text}
+    </div>
+  );
+}
+createRoot(document.getElementById("root")).render(<App />);
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+  });
+}
