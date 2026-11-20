@@ -39,31 +39,9 @@
   .summary-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}
   .stat{padding:9px 10px;border-radius:10px}.stat-top{height:24px}.stat-icon{width:27px;height:27px;border-radius:7px}.stat-icon svg{width:15px;height:15px}.stat-arrow{display:none}
   .stat-value{font-size:20px;margin-top:7px}.stat-label{font-size:10px;margin-top:4px}.stat-sub{font-size:8px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .dashboard-home .weather-card{display:grid;grid-template-columns:150px 1fr;margin:0;border-radius:10px;min-height:118px}
-  .dashboard-home .weather-head{padding:12px;border-right:1px solid #edf0f5}.dashboard-home .weather-head h2{font-size:14px;margin:4px 0}.dashboard-home .weather-head p{font-size:9px}.dashboard-home .weather-actions{align-items:flex-start}.dashboard-home .weather-actions .text-link{display:none}
-  .dashboard-home .weather-content{padding:10px 12px;gap:10px;flex-wrap:nowrap}.dashboard-home .weather-now{min-width:170px;gap:8px}.dashboard-home .weather-symbol{padding:7px}.dashboard-home .weather-symbol svg{width:25px;height:25px}.dashboard-home .weather-temp{font-size:27px}.dashboard-home .weather-description strong{font-size:11px}.dashboard-home .weather-description span,.dashboard-home .weather-description small{font-size:8px}
-  .dashboard-home .weather-days{flex:1;display:grid;grid-template-columns:repeat(3,minmax(58px,1fr));gap:5px}.dashboard-home .weather-day{min-width:0;padding:6px 4px;gap:4px;font-size:8px}.dashboard-home .weather-day:nth-child(n+4){display:none}.dashboard-home .weather-day strong{font-size:9px}.dashboard-home .weather-credit,.dashboard-home .weather-search{display:none}
-  .dashboard-home .exchange-card,.dashboard-home .month-calendar,.dashboard-home .notes-card,.dashboard-home .links-card,.dashboard-home .weekly-card,.dashboard-home .columns,.dashboard-home .task-card,.dashboard-home footer{display:none}
   .dashboard-section .content{padding-bottom:18px}.dashboard-section .intro{margin-bottom:10px}.dashboard-section .card{margin-bottom:10px}.dashboard-section footer{display:none}
 }
 .links-card{margin:0 0 20px}.links-icon{background:#eaf7f3;color:#3a9b80;border-radius:10px;padding:10px;display:grid;place-items:center}.links-body{padding:0 22px 20px}.links-form{background:#f9fbfc;border:1px solid #e9eef1;border-radius:10px;padding:14px}.links-fields{display:grid;grid-template-columns:1fr 1.4fr;gap:12px}.links-fields label{font-size:11px;font-weight:700;color:#646b7d;display:grid;gap:6px}.links-fields input{border:1px solid #e0e4ec;border-radius:8px;background:white;min-width:0;width:100%;padding:10px 11px;color:#343948;outline-color:#8378e8;font-size:12px}.links-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.links-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:14px}.link-item{display:flex;align-items:center;gap:8px;border:1px solid #e9edf2;border-radius:10px;padding:12px;background:#fff;min-width:0}.link-open{display:flex;align-items:center;gap:10px;flex:1;min-width:0;color:#687083;text-decoration:none}.link-open:hover strong{color:#6559d7}.link-open:focus-visible,.link-controls button:focus-visible{outline:3px solid #bdb5ff;outline-offset:2px}.link-item-icon{height:34px;width:34px;flex:none;display:grid;place-items:center;background:#eef8f5;color:#4a9e86;border-radius:9px}.link-text{display:grid;gap:4px;min-width:0;flex:1}.link-text strong,.link-text small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.link-text strong{font-size:12px;color:#3f465a}.link-text small{font-size:10px;color:#959cab}.link-controls{display:flex;flex:none;gap:2px}.link-controls button{border:0;background:transparent;color:#a4a9b8;border-radius:6px;padding:5px;display:grid;place-items:center}.link-controls button:hover{background:#f1efff;color:#6559d7}.links-empty{font-size:12px;color:#969cab;padding:10px 2px}.links-error{color:#a94c43;font-size:12px;line-height:1.5}.links-success{color:#24754c;font-size:12px}.links-foot{padding:12px 22px;border-top:1px solid #f0f1f6;color:#9298a8;font-size:10px;line-height:1.5}@media(max-width:600px){.links-body{padding:0 16px 18px}.links-fields{grid-template-columns:1fr}.links-actions{flex-wrap:wrap}.links-foot{padding:12px 16px}}
-
-/* Full-screen dark information board on an iPhone in landscape. */
-@media (orientation:landscape) and (max-width:1000px) and (max-height:550px){
-  .app.dashboard-home{display:block;background:#07090d;color:#f4f7ff}
-  .dashboard-home>.sidebar,.dashboard-home .topbar,.dashboard-home .intro,.dashboard-home .demo-banner,.dashboard-home .error,.dashboard-home .sync-loading-banner{display:none}
-  .dashboard-home .main{width:100%;height:100dvh;overflow:hidden;background:radial-gradient(circle at 80% 0,#18213b 0,#0c1019 35%,#07090d 75%)}
-  .dashboard-home .content{height:100dvh;padding:10px;display:grid;grid-template-rows:minmax(0,.82fr) minmax(0,1.18fr);gap:9px;overflow:hidden}
-  .dashboard-home .summary-grid{height:100%;margin:0;gap:9px}
-  .dashboard-home .stat{height:100%;display:flex;flex-direction:column;justify-content:center;padding:12px 14px;background:linear-gradient(145deg,#171c28,#10141e);border:1px solid #293145;box-shadow:0 10px 28px #0005}
-  .dashboard-home .stat-value{color:#f7f9ff;font-size:clamp(23px,4.8vw,38px);margin-top:8px}
-  .dashboard-home .stat-label{color:#e5e9f3;font-size:11px}.dashboard-home .stat-sub{color:#7f899e;font-size:8px}
-  .dashboard-home .purple{background:#33296a;color:#b9abff}.dashboard-home .blue{background:#173b5d;color:#78c5ff}.dashboard-home .orange{background:#54341d;color:#ffbd77}.dashboard-home .green{background:#183e35;color:#74ddb9}
-  .dashboard-home .weather-card{height:100%;min-height:0;background:linear-gradient(135deg,#151b29,#0e1420);border:1px solid #293145;box-shadow:0 12px 32px #0006}
-  .dashboard-home .weather-head{border-right-color:#293145;justify-content:center}.dashboard-home .weather-head h2{color:#f4f7ff}.dashboard-home .weather-head p{color:#8994aa}.dashboard-home .section-kicker{color:#6f7b94}
-  .dashboard-home .weather-temp{color:#fff}.dashboard-home .weather-description strong{color:#e9edf6}.dashboard-home .weather-description span,.dashboard-home .weather-description small{color:#8590a5}
-  .dashboard-home .weather-symbol{background:#382d1d;color:#ffc56f}.dashboard-home .weather-day{background:#111722;border-color:#293145;color:#8f9ab0}.dashboard-home .weather-day strong{color:#f1f4fa}.dashboard-home .weather-day strong small{color:#737f96}.dashboard-home .weather-day svg{color:#9b8cff}
-}
 
 /* Unified dark responsive theme. */
 body{background:#07090d;color:#f4f7ff}
@@ -83,24 +61,33 @@ html,body,#root{width:100%;min-height:100%;background:#07090d}body{padding:env(s
 .exchange-base,.note-item,.link-item,.month-item{background:#111722;border-color:#293145}.exchange-base-head,.exchange-foot,.month-calendar-head,.month-calendar-foot{border-color:#293145}.exchange-base-head strong,.exchange-line strong,.note-item p,.link-text strong,.month-navigation h3,.month-agenda h3,.month-item strong{color:#eef2f8}.exchange-foot,.exchange-meta,.link-text small{color:#838ea3}.month-calendar-symbol,.exchange-symbol{background:#29254a;color:#b9adff}.month-day{background:#0d121b;color:#aeb7c7}.month-agenda{background:#0d121b;border-color:#293145}.month-arrow,.month-today{background:#151b27;border-color:#30384a;color:#c4cad6}
 .modal,.settings-dialog{background:#111722;color:#f3f6fc}.modal label,.settings-dialog h2{color:#e9edf5}.settings-dialog p{color:#9da7b9}.settings-change-list{background:#0d121b;color:#cbd2df}
 
-/* Widget-only home screen at every phone orientation. */
-.dashboard-home{display:block;height:100dvh;overflow:hidden}
-.dashboard-home>.sidebar,.dashboard-home .topbar,.dashboard-home .intro,.dashboard-home .demo-banner,.dashboard-home .error,.dashboard-home .sync-loading-banner{display:none}
-.dashboard-home .main{width:100%;height:100dvh;overflow:hidden}
-.dashboard-home .content{height:100dvh;max-width:none;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px;overflow:hidden}
-.dashboard-home .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
-.dashboard-home .stat{width:100%;min-height:105px;display:flex;flex-direction:column;justify-content:center;padding:14px;text-align:left;color:inherit;background:linear-gradient(145deg,#171c28,#10141e)}
+/* Widgets are kept compact, with vertical scrolling when they exceed the display. */
+.dashboard-home{display:block}
+.dashboard-home>.sidebar,.dashboard-home .topbar,.dashboard-home .intro,.dashboard-home .error,.dashboard-home .sync-loading-banner{display:none}
+.dashboard-home .main{width:100%;height:100dvh;overflow:auto;overscroll-behavior:contain}
+.dashboard-home .content{min-height:100%;max-width:none;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;align-content:start;gap:12px}
+.dashboard-home .summary-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0}
+.dashboard-home .stat{width:100%;min-width:0;min-height:105px;display:flex;flex-direction:column;justify-content:center;padding:14px;text-align:left;color:inherit;background:linear-gradient(145deg,#171c28,#10141e)}
 .app:has(.swipe-panel){overflow-x:clip}
 .swipe-panel{touch-action:pan-y pinch-zoom}
 .swipe-panel[style*="--swipe-offset"]{transform:translateX(var(--swipe-offset))}
-.dashboard-home .stat:focus-visible,.dashboard-home .detail-tile:focus-visible{outline:3px solid #9c8fff;outline-offset:2px}
-.dashboard-home .stat-value{font-size:clamp(25px,8vw,42px)}
-.dashboard-home .home-details-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(190px,1fr);gap:10px;min-height:0}
-.dashboard-home .detail-tiles{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;min-height:0}
-.dashboard-home .detail-tile{min-width:0;margin:0;cursor:pointer}
-.dashboard-home .weather-card{height:100%;min-height:0;margin:0;display:flex;flex-direction:column;border-color:#293145}
-.dashboard-home .weather-head{padding:14px 16px 6px}.dashboard-home .weather-content{flex:1;padding:8px 16px 14px;align-content:center}.dashboard-home .weather-days{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}.dashboard-home .weather-day:nth-child(n+4),.dashboard-home .weather-credit,.dashboard-home .weather-search,.dashboard-home .weather-actions .text-link{display:none}
-.dashboard-home .exchange-card,.dashboard-home .month-calendar,.dashboard-home .notes-card,.dashboard-home .links-card,.dashboard-home .weekly-card,.dashboard-home .columns,.dashboard-home .task-card,.dashboard-home footer{display:none}
+.dashboard-home .stat:focus-visible,.dashboard-home .detail-tile:focus-visible,.weather-open:focus-visible,.detail-back:focus-visible{outline:3px solid #9c8fff;outline-offset:2px}
+.dashboard-home .stat-value{font-size:clamp(25px,4.8vw,42px)}
+.dashboard-home .home-details-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(170px,1fr);gap:10px}
+.dashboard-home .home-details-grid > :only-child{grid-column:1 / -1}
+.dashboard-home .detail-tiles{display:grid;grid-auto-rows:1fr;gap:10px}
+.dashboard-home .detail-tile{min-width:0;margin:0}
+.dashboard-home .weather-card{position:relative;min-height:164px;margin:0;display:flex;flex-direction:column;border-color:#293145;overflow:visible}
+.dashboard-home .weather-head{padding:14px 16px 6px}
+.dashboard-home .weather-content{flex:1;padding:8px 16px 14px;align-content:center}
+.dashboard-home .weather-days{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;min-width:0}
+.dashboard-home .weather-day{min-width:0}
+.dashboard-home .weather-day:nth-child(n+4){display:none}
+.weather-open{position:absolute;inset:0;width:100%;border:0;border-radius:inherit;background:transparent}
+.home-extra-widgets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.home-extra-widgets .detail-tile{min-height:54px;gap:8px;padding:8px 10px;font-size:13px;font-weight:700}
+.home-extra-widgets .detail-tile-icon{width:32px;height:32px}
+.home-empty{padding:16px 0;text-align:center;color:#aeb8ca}
 .desktop-settings-shortcut{display:none}
 
 /* The widget-only dashboard hides the full navigation. Desktop users still
@@ -115,18 +102,41 @@ html,body,#root{width:100%;min-height:100%;background:#07090d}body{padding:env(s
 .modal-overlay{z-index:50}
 
 @media (orientation:landscape) and (max-height:550px){
-  .dashboard-home .content{padding:10px;grid-template-rows:minmax(0,.82fr) minmax(0,1.18fr);gap:9px}
-  .dashboard-home .summary-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.dashboard-home .stat{min-height:0}
-  .dashboard-home .weather-card{display:grid;grid-template-columns:150px 1fr}.dashboard-home .weather-head{border-right:1px solid #293145;justify-content:center}.dashboard-home .weather-content{flex-wrap:nowrap}
-}
-
-@media (orientation:landscape) and (max-height:550px) and (min-width:1001px),
-       (orientation:landscape) and (max-height:550px) and (hover:hover) and (pointer:fine){
-  .dashboard-home .content{padding-right:max(74px,env(safe-area-inset-right))}
+  .dashboard-home .content{gap:9px}
+  .dashboard-home .summary-grid,.dashboard-home .detail-tiles,.home-extra-widgets{gap:8px}
+  .dashboard-home .stat{min-height:86px;padding:8px 10px}
+  .dashboard-home .stat-value{font-size:clamp(20px,4vw,32px);margin-top:5px}
+  .dashboard-home .weather-card{min-height:138px}
+  .dashboard-home .weather-head{padding:8px 11px 3px}
+  .dashboard-home .weather-head h2{font-size:14px;margin:3px 0}
+  .dashboard-home .weather-content{padding:5px 10px 8px;gap:6px}
+  .dashboard-home .weather-now{min-width:145px;gap:6px}
+  .dashboard-home .weather-symbol{padding:5px}
+  .dashboard-home .weather-symbol svg{width:24px;height:24px}
+  .dashboard-home .weather-temp{font-size:23px}
+  .dashboard-home .weather-description strong{font-size:10px}
+  .dashboard-home .weather-description span,.dashboard-home .weather-description small{font-size:8px}
+  .dashboard-home .weather-days{flex:1 1 185px;gap:4px}
+  .dashboard-home .weather-day{padding:5px 3px;gap:3px;font-size:8px}
+  .dashboard-home .weather-day strong{font-size:9px}
+  .dashboard-home .detail-tiles .detail-tile{gap:8px;padding:7px 9px}
+  .dashboard-home .detail-tiles .detail-tile-icon{width:30px;height:30px}
+  .dashboard-home .detail-tiles .detail-tile small{font-size:8px;letter-spacing:.5px}
+  .dashboard-home .detail-tiles .detail-tile strong{font-size:15px}
+  .home-extra-widgets .detail-tile{min-height:44px}
 }
 
 @media (max-width:600px) and (orientation:portrait){
-  .dashboard-home{height:auto;min-height:100dvh;overflow:auto}.dashboard-home .main,.dashboard-home .content{height:auto;min-height:100dvh;overflow:visible}.dashboard-home .content{padding:10px}.dashboard-home .summary-grid{gap:8px}.dashboard-home .stat{min-height:96px;padding:12px}.dashboard-home .stat-icon{width:32px;height:32px}.dashboard-home .stat-value{margin-top:8px}.dashboard-home .home-details-grid{grid-template-columns:1fr}.dashboard-home .detail-tiles{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none}.dashboard-home .weather-now{min-width:100%;}.dashboard-home .weather-content{gap:10px}.dashboard-home .weather-head h2{font-size:15px}
+  .dashboard-home .summary-grid,.home-extra-widgets{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .dashboard-home .stat{min-height:96px;padding:12px}
+  .dashboard-home .stat-icon{width:32px;height:32px}
+  .dashboard-home .stat-value{margin-top:8px}
+  .dashboard-home .home-details-grid{grid-template-columns:1fr}
+  .dashboard-home .detail-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dashboard-home .detail-tiles > :only-child{grid-column:1 / -1}
+  .dashboard-home .weather-now{min-width:100%}
+  .dashboard-home .weather-content{gap:10px}
+  .dashboard-home .weather-head h2{font-size:15px}
   .dashboard-section .sidebar{width:50px;padding:12px 6px}.dashboard-section .topbar{height:52px;padding:0 11px}.dashboard-section .status{display:none}.dashboard-section .content{padding:16px 11px}.dashboard-section .summary-grid{grid-template-columns:1fr 1fr}.dashboard-section .card-head{padding:17px 15px}.dashboard-section .list,.dashboard-section .event-list,.dashboard-section .task-list{padding-left:15px;padding-right:15px}
 }
 

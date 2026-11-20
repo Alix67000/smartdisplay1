@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, MapPin } from 'lucide-react';
+import { CheckCircle2, CloudSun, Mail, MapPin } from 'lucide-react';
 import Loading from './Loading.jsx';
 import CitySearch from './CitySearch.jsx';
 import { widgetDefinitions } from './settings.js';
@@ -152,8 +152,8 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
       {saveError && !notice && (
         <p className="settings-alert" role="alert">Le dernier enregistrement a échoué. Vérifie le stockage de cet appareil.</p>
       )}
-      <details className="settings-disclosure settings-widget-disclosure">
-        <summary data-no-swipe>Visibilité sur le tableau de bord</summary>
+      <details className="settings-disclosure" data-no-swipe>
+        <summary>Visibilité sur le tableau de bord</summary>
         <div className="settings-disclosure-body settings-widget-groups">
           {widgetGroups.map(([group, definitions]) => (
             <fieldset key={group}>
@@ -175,7 +175,10 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
       </details>
       <div className="settings-widget-options">
         <div className="settings-widget-option">
-          <h3>E-mails</h3>
+          <h3 className="settings-option-heading">
+            <span className="settings-service-icon" aria-hidden="true"><Mail size={19} /></span>
+            E-mails
+          </h3>
           <label className="settings-field">
             Période à récupérer
             <select aria-label="Période à récupérer" value={draft.emailHours} onChange={event => editSettings({ ...draft, emailHours: Number(event.target.value) })}>
@@ -188,7 +191,10 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
           <p className="settings-hint">À la prochaine actualisation, les messages récupérés sont transmis à Gemini pour l’analyse.</p>
         </div>
         <div className="settings-widget-option">
-          <h3>Météo</h3>
+          <h3 className="settings-option-heading">
+            <span className="settings-service-icon" aria-hidden="true"><CloudSun size={19} /></span>
+            Météo
+          </h3>
           <p className="settings-current-city">
             <MapPin size={16} aria-hidden="true" />
             {draftCity ? cityLabel(draftCity) : 'Aucune ville sélectionnée'}
@@ -220,8 +226,8 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
           <button type="button" className="secondary" onClick={resetDraft}>Abandonner mes modifications et recharger</button>
         </div>
       )}
-      {shown && actionsTarget && createPortal(
-        <>
+      {shown && (
+        <div className="settings-widget-footer">
           <div className="settings-save-panel">
             <p className="settings-hint" role="status">{dirty ? 'Modifications non enregistrées' : 'Réglages à jour sur cet appareil'}</p>
             <button type="button" className="primary settings-save-button" disabled={!dirty || changedElsewhere || saving} onClick={() => setConfirming(true)}>
@@ -239,26 +245,26 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
               <span>{notice}</span>
             </div>
           )}
-          {confirming && (
-            <div className="settings-dialog-overlay" data-no-swipe>
-              <div className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title" aria-describedby="settings-dialog-description" ref={dialogRef}>
-                <h2 id="settings-dialog-title">Confirmer les modifications ?</h2>
-                <p id="settings-dialog-description">Les réglages seront enregistrés sur cet appareil.</p>
-                {changes.length > 0 && (
-                  <ul className="settings-change-list">
-                    {changes.map(item => <li key={item}>{item}</li>)}
-                  </ul>
-                )}
-                {changedElsewhere && <p role="alert" className="settings-alert">Les réglages ont changé ailleurs. Annule et recharge les réglages avant de réessayer.</p>}
-                {saving && <Loading label="Enregistrement en cours…" />}
-                <div className="settings-dialog-actions">
-                  <button ref={cancelRef} type="button" className="secondary" disabled={saving} onClick={() => setConfirming(false)}>Annuler</button>
-                  <button type="button" className="primary" disabled={saving || changedElsewhere} onClick={save}>{saving ? 'Enregistrement…' : 'Oui, enregistrer'}</button>
-                </div>
-              </div>
+        </div>
+      )}
+      {shown && actionsTarget && confirming && createPortal(
+        <div className="settings-dialog-overlay" data-no-swipe>
+          <div className="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-dialog-title" aria-describedby="settings-dialog-description" ref={dialogRef}>
+            <h2 id="settings-dialog-title">Confirmer les modifications ?</h2>
+            <p id="settings-dialog-description">Les réglages seront enregistrés sur cet appareil.</p>
+            {changes.length > 0 && (
+              <ul className="settings-change-list">
+                {changes.map(item => <li key={item}>{item}</li>)}
+              </ul>
+            )}
+            {changedElsewhere && <p role="alert" className="settings-alert">Les réglages ont changé ailleurs. Annule et recharge les réglages avant de réessayer.</p>}
+            {saving && <Loading label="Enregistrement en cours…" />}
+            <div className="settings-dialog-actions">
+              <button ref={cancelRef} type="button" className="secondary" disabled={saving} onClick={() => setConfirming(false)}>Annuler</button>
+              <button type="button" className="primary" disabled={saving || changedElsewhere} onClick={save}>{saving ? 'Enregistrement…' : 'Oui, enregistrer'}</button>
             </div>
-          )}
-        </>,
+          </div>
+        </div>,
         actionsTarget,
       )}
     </section>

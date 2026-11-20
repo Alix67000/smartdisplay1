@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {collection,onSnapshot} from 'firebase/firestore';
+import {Cloud} from 'lucide-react';
 import {observeFirebaseUser,firebaseAuth} from '../lib/firebase-client.js';
 import {firestore} from '../lib/firebase-db.js';
 import {COLLECTIONS,firestoreWrite} from '../lib/sync-store.js';
@@ -74,11 +75,15 @@ export default function SyncAccount({visible,onApplied,onStatusChange}){
  return (
   <section hidden={!visible} className="settings-panel settings-sync" aria-labelledby="settings-sync-title">
    <h2 id="settings-sync-title">Synchronisation</h2>
-   <div className="settings-sync-state">
-    {user?.email && <p className="settings-sync-identity">{user.email}</p>}
-    {user === undefined ? <Loading label="Vérification de la connexion…" /> :
-     ['connecting', 'working', 'waiting'].includes(status) ? <Loading label={labels[status]} /> :
-      <p role="status">{labels[status] || status}</p>}
+   <div className="settings-service">
+    <div className="settings-service-icon" aria-hidden="true"><Cloud size={19} /></div>
+    <div className="settings-service-copy settings-sync-state">
+     <h3>Firebase</h3>
+     {user?.email && <p>{user.email}</p>}
+     {user === undefined ? <Loading label="Vérification de la connexion…" /> :
+      ['connecting', 'working', 'waiting'].includes(status) ? <Loading label={labels[status]} /> :
+       <p role="status">{labels[status] || status}</p>}
+    </div>
    </div>
    {user && owner && owner !== user.uid && (
     <div className="settings-alert" role="alert">Les données de cet appareil sont associées à un autre compte. Reconnecte ce compte pour reprendre la synchronisation.</div>

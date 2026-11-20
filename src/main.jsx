@@ -27,6 +27,8 @@ import {
   AlertCircle,
   LogOut,
   Inbox,
+  Link2,
+  StickyNote,
 } from "lucide-react";
 import "./style.css";
 import { importedItems, mergeById } from "./lib/automation.js";
@@ -80,9 +82,49 @@ const msal = clientId
     })
   : null;
 const day = new Date();
-const routes={"Vue d’ensemble":"","E-mails":"emails",Agenda:"agenda",Tâches:"taches",Échéances:"echeances",Paramètres:"parametres",Météo:"meteo",Devises:"devises",Horloge:"horloge"};
-const routeNames=Object.fromEntries(Object.entries(routes).map(([name,route])=>[route,name]));
-const navFromHash=()=>routeNames[window.location.hash.replace(/^#\/?/,'')]||"Vue d’ensemble";
+const dashboard = "Vue d’ensemble";
+const routes = {
+  [dashboard]: "",
+  "E-mails": "emails",
+  Agenda: "agenda",
+  Tâches: "taches",
+  Échéances: "echeances",
+  Paramètres: "parametres",
+  Météo: "meteo",
+  Devises: "devises",
+  Horloge: "horloge",
+  "Calendrier mensuel": "calendrier",
+  "Notes rapides": "notes",
+  "Liens utiles": "liens",
+  "Briefing intelligent": "briefing",
+};
+const routeNames = new Map(Object.entries(routes).map(([name, route]) => [route, name]));
+const googleReturnKey = "pilotage.google.return.v1";
+const googleReturnRoutes = ["emails", "agenda", "briefing", "parametres"];
+const extraWidgets = [
+  ["monthlyCalendar", "Calendrier mensuel", CalendarDays],
+  ["notes", "Notes rapides", StickyNote],
+  ["usefulLinks", "Liens utiles", Link2],
+  ["briefing", "Briefing intelligent", Sparkles],
+  ["emails", "E-mails", Mail, "E-mails récents"],
+  ["agenda", "Agenda", CalendarDays, "Mon agenda"],
+  ["tasks", "Tâches", CheckSquare, "Mes tâches"],
+];
+function readNavigation() {
+  const { hash, search } = window.location;
+  if (new URLSearchParams(search).get("google")) {
+    let route;
+    try {
+      route = sessionStorage.getItem(googleReturnKey);
+    } catch {}
+    const destination = googleReturnRoutes.includes(route) ? route : "emails";
+    return { name: routeNames.get(destination) };
+  }
+  return {
+    name: routeNames.get(hash.replace(/^#\/?/, "")) || dashboard,
+    entry: window.history.state?.dashboardEntry,
+  };
+}
 const dateISO = (d) => {
   const copy = new Date(d);
   copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset());
@@ -164,7 +206,8 @@ function App() {
     [widgetSaveError, setWidgetSaveError] = useState(false),
     [syncStatus, setSyncStatus] = useState("idle");
   const [settingsActionsTarget, setSettingsActionsTarget] = useState(null);
-  const settingsHeadingRef = useRef(null);
+  const pageHeading = useRef(null);
+  const settingsShortcut = useRef(null);
   const swipePanel = useRef(null);
   const swipeArrival = useRef(0);
   const settingsRef = useRef(widgetSettings);
@@ -280,7 +323,7 @@ function App() {
   const [weekRunning, setWeekRunning] = useState(false),
     [progress, setProgress] = useState(null),
     [moreMessages, setMoreMessages] = useState(false);
-  const [nav, setNav] = useState(navFromHash),
+  const [navigation, setNavigation] = useState(readNavigation),
     [tasks, setTasks] = useState(loadTasks),
     [showForm, setShowForm] = useState(false),
     [title, setTitle] = useState(""),
@@ -295,12 +338,22 @@ function App() {
     [mailError, setMailError] = useState(false),
     [error, setError] = useState(""),
     [search, setSearch] = useState("");
-  const previousNav = useRef(nav);
+  const { name: nav, entry } = navigation;
+  const previousNavigation = useRef(navigation);
   useEffect(() => {
-    if (nav !== "Vue d’ensemble") {
-      settingsHeadingRef.current?.focus();
-    } else if (previousNav.current !== nav) {
-      document.querySelector(`[data-widget-route="${routes[previousNav.current]}"]`)?.focus();
+    const previous = previousNavigation.current;
+    if (nav !== dashboard) {
+      if (swipePanel.current) swipePanel.current.scrollTop = 0;
+      if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+      pageHeading.current?.focus({ preventScroll: true });
+    } else if (previous.name !== dashboard) {
+      const widgets = [...(swipePanel.current?.querySelectorAll("[data-widget-route]") || [])];
+      const shortcut = previous.entry?.widget === "settingsShortcut" ? settingsShortcut.current : null;
+      const target = (shortcut?.getClientRects().length && shortcut)
+        || widgets.find((widget) => widget.dataset.widgetId === previous.entry?.widget)
+        || widgets.find((widget) => widget.dataset.widgetRoute === routes[previous.name])
+        || widgets[0];
+      target?.focus();
     }
     if (swipeArrival.current) {
       swipePanel.current?.animate?.(
@@ -309,10 +362,34 @@ function App() {
       );
       swipeArrival.current = 0;
     }
-    previousNav.current = nav;
-  }, [nav]);
-  useEffect(()=>{const changed=()=>setNav(navFromHash());window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed)},[]);
-  function navigate(name){const safe=Object.hasOwn(routes,name)?name:"Vue d’ensemble";const hash=routes[safe]?`#/${routes[safe]}`:'#/';if(window.location.hash!==hash)history.pushState(null,'',hash);setNav(safe)}
+    previousNavigation.current = { name: nav, entry };
+  }, [nav, entry]);
+  useEffect(() => {
+    function changed() {
+      const next = readNavigation();
+      setNavigation((current) => current.name === next.name
+        && current.entry?.steps === next.entry?.steps
+        && current.entry?.widget === next.entry?.widget ? current : next);
+    }
+    window.addEventListener("popstate", changed);
+    window.addEventListener("hashchange", changed);
+    return () => {
+      window.removeEventListener("popstate", changed);
+      window.removeEventListener("hashchange", changed);
+    };
+  }, []);
+  function navigate(name, widget) {
+    if (name === nav) return;
+    if (name === dashboard && entry) {
+      window.history.go(-entry.steps);
+      return;
+    }
+    const dashboardEntry = name === dashboard ? undefined
+      : nav === dashboard ? { steps: 1, widget }
+        : entry && { ...entry, steps: entry.steps + 1 };
+    window.history.pushState({ dashboardEntry }, "", `#/${routes[name]}`);
+    setNavigation({ name, entry: dashboardEntry });
+  }
   function refreshLocal() {
     setTasks(loadTasks());
     setLocalDeadlines(loadLocal("pilotage.deadlines.v1"));
@@ -369,6 +446,10 @@ function App() {
       const result = url.searchParams.get("google");
       if (result) {
         url.searchParams.delete("google");
+        url.hash = `#/${routes[nav]}`;
+        try {
+          sessionStorage.removeItem(googleReturnKey);
+        } catch {}
         window.history.replaceState(
           {},
           "",
@@ -481,7 +562,6 @@ function App() {
       setError(
         "Configure VITE_MICROSOFT_CLIENT_ID dans Vercel ou dans le fichier .env.local avant de te connecter.",
       );
-      navigate("Paramètres");
       return;
     }
     setLoading(true);
@@ -579,6 +659,9 @@ function App() {
       const start = await requestWithTimeout("/api/google?action=start", { method: "POST" });
       const data = await start.json().catch(() => ({}));
       if (!start.ok || typeof data.url !== "string") throw new Error(data.error || "Impossible de démarrer la connexion Google.");
+      try {
+        sessionStorage.setItem(googleReturnKey, routes[nav]);
+      } catch {}
       window.location.assign(data.url);
     } catch (e) {
       setLoading(false);
@@ -588,17 +671,16 @@ function App() {
         "auth/unauthorized-domain": "Ce domaine doit être autorisé dans la configuration de connexion Google de Smart Display.",
       };
       setError(messages[e?.code] || e.message || "Connexion Google impossible.");
-      navigate("Paramètres");
     }
   }
 
   function onTouchStart(event) {
     resetSwipe();
     if (showForm || event.currentTarget.querySelector('[aria-modal="true"]')) return;
-    if (nav !== "Vue d’ensemble" && nav !== "Paramètres") return;
+    if (nav !== dashboard && nav !== "Paramètres") return;
     if (event.touches.length !== 1) return;
     const control = event.target.closest?.("button,a,input,select,textarea,label,[role=button],[role=link],[contenteditable],[data-no-swipe]");
-    if (control && !(nav === "Vue d’ensemble" && control.hasAttribute("data-widget-route"))) return;
+    if (control && !(nav === dashboard && control.hasAttribute("data-widget-route"))) return;
     const { identifier, clientX, clientY } = event.touches[0];
     if (clientX < 24 || clientX > window.innerWidth - 24) return;
     swipeStart.current = { identifier, x: clientX, y: clientY };
@@ -612,7 +694,7 @@ function App() {
       return;
     }
     if (!start.dragging && (Math.abs(dx) < 10 || Math.abs(dx) < 1.5 * Math.abs(dy))) return;
-    const direction = nav === "Vue d’ensemble" ? -1 : 1;
+    const direction = nav === dashboard ? -1 : 1;
     if (!start.dragging && dx * direction <= 0) return;
     start.dragging = true;
     if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
@@ -641,8 +723,8 @@ function App() {
     }
     const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
     const horizontalSwipe = Math.abs(dx) >= 64 && Math.abs(dx) >= 1.5 * Math.abs(dy);
-    const destination = nav === "Vue d’ensemble" && dx < 0 ? "Paramètres"
-      : nav === "Paramètres" && dx > 0 ? "Vue d’ensemble" : null;
+    const destination = nav === dashboard && dx < 0 ? "Paramètres"
+      : nav === "Paramètres" && dx > 0 ? dashboard : null;
     resetSwipe(!destination || !horizontalSwipe);
     if (!destination || !horizontalSwipe) return;
     if (event.cancelable) event.preventDefault();
@@ -840,29 +922,28 @@ function App() {
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
+  const detailWidgets = extraWidgets.filter(([id]) => visible[id]);
+  const hasStats = visible.statEmails || visible.statAgenda || visible.statTasks || visible.statLate;
+  const hasPrimaryDetails = visible.weather || visible.exchangeRates || visible.clock;
   const items = [
-    ["Vue d’ensemble", LayoutDashboard],
+    [dashboard, LayoutDashboard],
     ["E-mails", Mail],
     ["Agenda", CalendarDays],
     ["Tâches", CheckSquare],
     ["Échéances", Clock3],
   ];
   const sectionTitle = {
-    "Vue d’ensemble": "Vue d’ensemble",
     "E-mails": "Mes e-mails",
     Agenda: "Mon agenda",
     Tâches: "Mes tâches",
     Échéances: "Mes échéances",
-    Paramètres: "Paramètres",
-    Météo: "Météo",
-    Devises: "Devises",
-    Horloge: "Horloge",
-  };
+  }[nav] || nav;
+  const showMailError = error && googleReturnRoutes.includes(routes[nav]);
   return (
     <div
       className={
         "app " +
-        (nav === "Vue d’ensemble" ? "dashboard-home" : "dashboard-section")
+        (nav === dashboard ? "dashboard-home" : "dashboard-section")
       }
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
@@ -887,6 +968,8 @@ function App() {
             <button
               key={name}
               className={"nav-item " + (nav === name ? "active" : "")}
+              aria-label={name}
+              aria-current={nav === name ? "page" : undefined}
               onClick={() => navigate(name)}
             >
               <Icon size={18} />
@@ -913,26 +996,27 @@ function App() {
           </div>
         </div>
       </aside>
-      {!showForm && (
+      {nav === dashboard && !showForm && (
         <button
+          ref={settingsShortcut}
           type="button"
           className="desktop-settings-shortcut"
           aria-label="Ouvrir les paramètres"
           title="Paramètres"
-          onClick={() => navigate("Paramètres")}
+          onClick={() => navigate("Paramètres", "settingsShortcut")}
         >
           <Settings size={20} aria-hidden="true" />
         </button>
       )}
       <main
         ref={swipePanel}
-        className={nav === "Vue d’ensemble" || nav === "Paramètres" ? "main swipe-panel" : "main"}
+        className={nav === dashboard || nav === "Paramètres" ? "main swipe-panel" : "main"}
       >
         {nav !== "Paramètres" && (
           <header className="topbar">
             <div className="breadcrumb">
               Espace de travail <ChevronRight size={14} />{" "}
-              <strong>{sectionTitle[nav]}</strong>
+              <strong>{sectionTitle}</strong>
             </div>
             <div className="header-right">
               <span className={"status " + (account ? "connected" : "")}>
@@ -961,13 +1045,17 @@ function App() {
           </header>
         )}
         <div className={nav === "Paramètres" ? "content settings-page" : "content"}>
-          {["E-mails","Météo","Devises","Horloge","Tâches"].includes(nav)&&<button type="button" className="detail-back" onClick={()=>navigate("Vue d’ensemble")}><ArrowLeft size={16}/> Tableau de bord</button>}
+          {nav !== dashboard && nav !== "Paramètres" && (
+            <button type="button" className="detail-back" onClick={() => navigate(dashboard)}>
+              <ArrowLeft size={16} aria-hidden="true" /> Tableau de bord
+            </button>
+          )}
           {nav === "Paramètres" ? (
             <header className="settings-page-heading">
-              <button type="button" className="settings-back" onClick={() => navigate("Vue d’ensemble")}>
+              <button type="button" className="settings-back" onClick={() => navigate(dashboard)}>
                 <ArrowLeft size={17} aria-hidden="true" /> Tableau de bord
               </button>
-              <h1 ref={settingsHeadingRef} tabIndex={-1}>Paramètres</h1>
+              <h1 ref={pageHeading} tabIndex={-1}>Paramètres</h1>
             </header>
           ) : (
             <div className="intro">
@@ -976,15 +1064,15 @@ function App() {
                   TON ESPACE DE TRAVAIL <span>✳</span>
                 </div>
                 <h1
-                  ref={nav !== "Vue d’ensemble" ? settingsHeadingRef : null}
-                  tabIndex={nav !== "Vue d’ensemble" ? -1 : undefined}
+                  ref={nav !== dashboard ? pageHeading : null}
+                  tabIndex={nav !== dashboard ? -1 : undefined}
                 >
-                  {nav === "Vue d’ensemble"
+                  {nav === dashboard
                     ? `Bonjour${account?.name ? ", " + account.name.split(" ")[0] : ""} 👋`
-                    : sectionTitle[nav]}
+                    : sectionTitle}
                 </h1>
                 <p>
-                  {nav === "Vue d’ensemble"
+                  {nav === dashboard
                     ? "Voici ce qui se passe dans votre journée."
                     : "Retrouvez les informations importantes au même endroit."}
                 </p>
@@ -1010,8 +1098,8 @@ function App() {
               className="sync-loading-banner"
             />
           )}
-          {error && (
-            <div className="error" role={nav === "Paramètres" ? "alert" : undefined}>
+          {showMailError && (
+            <div className="error" role="alert">
               <AlertCircle size={17} />
               <span>{error}</span>
               <button onClick={() => setError("")} aria-label="Fermer">
@@ -1022,13 +1110,13 @@ function App() {
           {!busyMail &&
             !account &&
             !sessionUnavailable &&
-            nav !== "Paramètres" && (
+            (nav === "E-mails" || nav === "Agenda") && (
               <div className="demo-banner">
                 <span>
                   Ta messagerie n’est pas connectée. Tes notes et tes tâches
                   restent accessibles.
                 </span>
-                <button onClick={connectGoogle}>
+                <button type="button" onClick={connectGoogle}>
                   Connecter Google <ArrowUpRight size={15} />
                 </button>
               </div>
@@ -1113,12 +1201,9 @@ function App() {
           </React.Suspense>
           {nav !== "Paramètres" && (
             <>
-              {nav === "Vue d’ensemble" && (
+              {nav === dashboard && (
                 <>
-                  {(visible.statEmails ||
-                    visible.statAgenda ||
-                    visible.statTasks ||
-                    visible.statLate) && (
+                  {hasStats && (
                     <div className="summary-grid">
                       {visible.statEmails && (
                         <Stat
@@ -1136,7 +1221,8 @@ function App() {
                           }
                           tone="purple"
                           route={routes["E-mails"]}
-                          onOpen={() => navigate("E-mails")}
+                          widget="statEmails"
+                          onOpen={() => navigate("E-mails", "statEmails")}
                         />
                       )}
                       {visible.statAgenda && (
@@ -1152,7 +1238,8 @@ function App() {
                           sub="Agenda de l’application"
                           tone="blue"
                           route={routes["Agenda"]}
-                          onOpen={() => navigate("Agenda")}
+                          widget="statAgenda"
+                          onOpen={() => navigate("Agenda", "statAgenda")}
                         />
                       )}
                       {visible.statTasks && (
@@ -1163,7 +1250,8 @@ function App() {
                           sub="À garder à l’œil"
                           tone="orange"
                           route={routes["Tâches"]}
-                          onOpen={() => navigate("Tâches")}
+                          widget="statTasks"
+                          onOpen={() => navigate("Tâches", "statTasks")}
                         />
                       )}
                       {visible.statLate && (
@@ -1176,251 +1264,281 @@ function App() {
                           }
                           tone="green"
                           route={routes["Échéances"]}
-                          onOpen={() => navigate("Échéances")}
+                          widget="statLate"
+                          onOpen={() => navigate("Échéances", "statLate")}
                         />
                       )}
                     </div>
                   )}
-                  <div className="home-details-grid">
-                    {visible.weather && (
-                      <Weather
-                        city={weatherCity}
-                        onCityChange={changeWeatherCity}
-                        unit={widgetSettings.weatherUnit}
-                        refreshMinutes={widgetSettings.weatherRefresh}
-                        compact
-                        onOpen={() => navigate("Météo")}
-                      />
-                    )}
-                    <div className="detail-tiles">
-                      {visible.exchangeRates && (
-                        <ExchangeRates compact onOpen={() => navigate("Devises")}/>
+                  {hasPrimaryDetails && (
+                    <div className="home-details-grid">
+                      {visible.weather && (
+                        <Weather
+                          city={weatherCity}
+                          unit={widgetSettings.weatherUnit}
+                          refreshMinutes={widgetSettings.weatherRefresh}
+                          compact
+                          onOpen={() => navigate("Météo", "weather")}
+                        />
                       )}
-                      {visible.clock && (
-                        <Clock compact onOpen={() => navigate("Horloge")}/>
+                      {(visible.exchangeRates || visible.clock) && (
+                        <div className="detail-tiles">
+                          {visible.exchangeRates && (
+                            <ExchangeRates compact onOpen={() => navigate("Devises", "exchangeRates")} />
+                          )}
+                          {visible.clock && (
+                            <Clock compact onOpen={() => navigate("Horloge", "clock")} />
+                          )}
+                        </div>
                       )}
                     </div>
-                  </div>
-                  {visible.monthlyCalendar && (
-                    <MonthlyCalendar
-                      deadlines={localDeadlines}
-                      tasks={tasks}
-                      events={events}
-                      outlook={account?.provider === "microsoft"}
-                      loading={busyMail}
-                      syncStatus={syncStatus}
-                      onOpenAgenda={() => navigate("Agenda")}
-                      onOpenTasks={() => navigate("Tâches")}
-                    />
                   )}
-                  {visible.notes && <QuickNotes />}
-                  {visible.usefulLinks && <UsefulLinks />}
-                  {visible.briefing && (
-                    <section className="card weekly-card">
-                      <div className="card-head">
-                        <div>
-                          <div className="section-kicker">
-                            BRIEFING INTELLIGENT
-                          </div>
-                          <h2>
-                            Résumé des {loadedHours} dernières heures{" "}
-                            <span className="count">
-                              {busyMail || !account || mailError
-                                ? "—"
-                                : account.provider === "google"
-                                  ? messages.length
-                                  : 0}
-                            </span>
-                          </h2>
-                          <p>
-                            Messages reçus sur les {loadedHours} dernières
-                            heures depuis @emmaus-scherwiller.fr
-                          </p>
-                        </div>
-                        {account?.provider === "google" && (
-                          <button
-                            className="primary"
-                            onClick={() => analyzeWeek()}
-                            disabled={
-                              loading ||
-                              weekRunning ||
-                              !messages.some((m) => !analyses[m.id])
-                            }
-                          >
-                            <Sparkles size={15} />
-                            {weekRunning
-                              ? "Analyse en cours…"
-                              : Object.keys(analyses).length
-                                ? "Analyser les restants"
-                                : `Analyser les ${loadedHours} heures`}
-                          </button>
-                        )}
-                      </div>
-                      <div className="weekly-body">
-                        <div className="privacy-note">
-                          Après « Actualiser » ou en lançant l’analyse, le
-                          contenu des messages est envoyé à Google Gemini.
-                          Vérifiez que votre organisation l’autorise. Les
-                          actions et dates reconnues sont ajoutées localement
-                          aux tâches et à l’agenda. Résultats IA à vérifier.
-                        </div>
-                        {busyMail ? (
-                          <Loading
-                            label="Chargement des messages…"
-                            className="weekly-empty"
-                          />
-                        ) : sessionUnavailable ? (
-                          <div className="weekly-empty">
-                            Impossible de vérifier la connexion à la messagerie.
-                          </div>
-                        ) : !account ? (
-                          <div className="weekly-empty">
-                            Connectez Gmail pour afficher les messages.{" "}
-                            <button
-                              className="text-link"
-                              onClick={connectGoogle}
-                            >
-                              Connecter Google{" "}
-                              <ArrowUpRight size={14} />
-                            </button>
-                          </div>
-                        ) : account?.provider !== "google" ? (
-                          <div className="weekly-empty">
-                            La synthèse IA est disponible avec Gmail.
-                          </div>
-                        ) : mailError ? (
-                          <div className="weekly-empty">
-                            Chargement des messages impossible. Consulte le
-                            message d’erreur ci-dessus.
-                          </div>
-                        ) : messages.length === 0 ? (
-                          <div className="weekly-empty">
-                            Aucun e-mail Emmaüs trouvé sur la période récupérée.
-                          </div>
-                        ) : (
-                          <>
-                            <div className="weekly-status">
-                              {progress && weekRunning
-                                ? `${progress.done} / ${progress.total} analyses effectuées`
-                                : `${messages.length} e-mail${messages.length > 1 ? "s" : ""} reçu${messages.length > 1 ? "s" : ""} sur les ${loadedHours} dernières heures · ${messages.filter((m) => analyses[m.id]).length} résumé${messages.filter((m) => analyses[m.id]).length > 1 ? "s" : ""} disponible${messages.filter((m) => analyses[m.id]).length > 1 ? "s" : ""}`}{" "}
-                              {moreMessages && (
-                                <strong>
-                                  · Limite de 50 messages atteinte : tous les
-                                  messages ne sont pas inclus.
-                                </strong>
-                              )}
-                            </div>
-                            {messages.some((m) => analyses[m.id]) && (
-                              <div className="weekly-digest">
-                                <h3>En résumé</h3>
-                                <ol>
-                                  {messages
-                                    .filter((m) => analyses[m.id])
-                                    .map((m) => (
-                                      <li key={m.id}>
-                                        <strong>
-                                          {displaySender(
-                                            m.from?.emailAddress?.name,
-                                          )}
-                                        </strong>{" "}
-                                        — {analyses[m.id].resume}
-                                        {analyses[m.id].truncated && (
-                                          <small> · message tronqué</small>
-                                        )}
-                                      </li>
-                                    ))}
-                                </ol>
-                                {messages.some(
-                                  (m) => analyses[m.id]?.actions?.length > 0,
-                                ) && (
-                                  <>
-                                    <h3>Actions à faire</h3>
-                                    <ul>
-                                      {messages
-                                        .filter((m) => analyses[m.id])
-                                        .flatMap((m) =>
-                                          analyses[m.id].actions.map((x, i) => (
-                                            <li key={m.id + "a" + i}>
-                                              {x}{" "}
-                                              <span>
-                                                —{" "}
-                                                {displaySender(
-                                                  m.from?.emailAddress?.name,
-                                                )}
-                                              </span>
-                                            </li>
-                                          )),
-                                        )}
-                                    </ul>
-                                  </>
-                                )}
-                                {messages.some(
-                                  (m) => analyses[m.id]?.echeances?.length > 0,
-                                ) && (
-                                  <>
-                                    <h3>Échéances à retenir</h3>
-                                    <ul>
-                                      {messages
-                                        .filter((m) => analyses[m.id])
-                                        .flatMap((m) =>
-                                          analyses[m.id].echeances.map(
-                                            (x, i) => (
-                                              <li key={m.id + "d" + i}>
-                                                {typeof x === "string"
-                                                  ? x
-                                                  : x.description}{" "}
-                                                <span>
-                                                  —{" "}
-                                                  {displaySender(
-                                                    m.from?.emailAddress?.name,
-                                                  )}
-                                                  {typeof x === "object" &&
-                                                  !x.date
-                                                    ? " · date à vérifier"
-                                                    : typeof x === "object"
-                                                      ? " · date reconnue"
-                                                      : ""}
-                                                </span>
-                                              </li>
-                                            ),
-                                          ),
-                                        )}
-                                    </ul>
-                                  </>
-                                )}
-                                <small>
-                                  Résumés générés par IA : vérifiez les
-                                  informations importantes dans les e-mails
-                                  d’origine.
-                                </small>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </section>
+                  {detailWidgets.length > 0 && (
+                    <div className="home-extra-widgets">
+                      {detailWidgets.map(([id, destination, Icon, label = destination]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className="card detail-tile"
+                          data-widget-id={id}
+                          data-widget-route={routes[destination]}
+                          onClick={() => navigate(destination, id)}
+                        >
+                          <span className="detail-tile-icon"><Icon size={18} aria-hidden="true" /></span>
+                          <span>{label}</span>
+                          <ArrowUpRight size={14} aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {!hasStats && !hasPrimaryDetails && detailWidgets.length === 0 && (
+                    <div className="home-empty">
+                      <p>Aucun widget affiché.</p>
+                      <button
+                        type="button"
+                        className="secondary"
+                        data-widget-id="homeSettings"
+                        data-widget-route="parametres"
+                        onClick={() => navigate("Paramètres", "homeSettings")}
+                      >
+                        <Settings size={17} aria-hidden="true" /> Ouvrir les paramètres
+                      </button>
+                    </div>
                   )}
                 </>
               )}
-              {nav === "Météo"&&<Weather city={weatherCity} onCityChange={changeWeatherCity} unit={widgetSettings.weatherUnit} refreshMinutes={widgetSettings.weatherRefresh}/>}
-              {nav === "Devises"&&<ExchangeRates/>}
-              {nav === "Horloge"&&<Clock/>}
-              {((nav === "Vue d’ensemble" &&
-                (visible.emails || visible.agenda)) ||
-                nav === "E-mails" ||
-                nav === "Agenda") && (
-                <div
-                  className={
-                    "columns " +
-                    (nav !== "Vue d’ensemble" ||
-                    !visible.emails ||
-                    !visible.agenda
-                      ? "single"
-                      : "")
-                  }
-                >
-                  {((nav === "Vue d’ensemble" && visible.emails) ||
-                    nav === "E-mails") && (
+              {nav === "Calendrier mensuel" && (
+                <MonthlyCalendar
+                  deadlines={localDeadlines}
+                  tasks={tasks}
+                  events={events}
+                  outlook={account?.provider === "microsoft"}
+                  loading={busyMail}
+                  syncStatus={syncStatus}
+                  onOpenAgenda={() => navigate("Agenda")}
+                  onOpenTasks={() => navigate("Tâches")}
+                />
+              )}
+              {nav === "Notes rapides" && <QuickNotes />}
+              {nav === "Liens utiles" && <UsefulLinks />}
+              {nav === "Briefing intelligent" && (
+                <section className="card weekly-card">
+                  <div className="card-head">
+                    <div>
+                      <div className="section-kicker">
+                        BRIEFING INTELLIGENT
+                      </div>
+                      <h2>
+                        Résumé des {loadedHours} dernières heures{" "}
+                        <span className="count">
+                          {busyMail || !account || mailError
+                            ? "—"
+                            : account.provider === "google"
+                              ? messages.length
+                              : 0}
+                        </span>
+                      </h2>
+                      <p>
+                        Messages reçus sur les {loadedHours} dernières
+                        heures depuis @emmaus-scherwiller.fr
+                      </p>
+                    </div>
+                    {account?.provider === "google" && (
+                      <button
+                        className="primary"
+                        onClick={() => analyzeWeek()}
+                        disabled={
+                          loading ||
+                          weekRunning ||
+                          !messages.some((m) => !analyses[m.id])
+                        }
+                      >
+                        <Sparkles size={15} />
+                        {weekRunning
+                          ? "Analyse en cours…"
+                          : Object.keys(analyses).length
+                            ? "Analyser les restants"
+                            : `Analyser les ${loadedHours} heures`}
+                      </button>
+                    )}
+                  </div>
+                  <div className="weekly-body">
+                    <div className="privacy-note">
+                      Après « Actualiser » ou en lançant l’analyse, le
+                      contenu des messages est envoyé à Google Gemini.
+                      Vérifiez que votre organisation l’autorise. Les
+                      actions et dates reconnues sont ajoutées localement
+                      aux tâches et à l’agenda. Résultats IA à vérifier.
+                    </div>
+                    {busyMail ? (
+                      <Loading
+                        label="Chargement des messages…"
+                        className="weekly-empty"
+                      />
+                    ) : sessionUnavailable ? (
+                      <div className="weekly-empty">
+                        Impossible de vérifier la connexion à la messagerie.
+                      </div>
+                    ) : !account ? (
+                      <div className="weekly-empty">
+                        Connectez Gmail pour afficher les messages.{" "}
+                        <button
+                          className="text-link"
+                          onClick={connectGoogle}
+                        >
+                          Connecter Google{" "}
+                          <ArrowUpRight size={14} />
+                        </button>
+                      </div>
+                    ) : account?.provider !== "google" ? (
+                      <div className="weekly-empty">
+                        La synthèse IA est disponible avec Gmail.
+                      </div>
+                    ) : mailError ? (
+                      <div className="weekly-empty">
+                        Chargement des messages impossible. Consulte le
+                        message d’erreur ci-dessus.
+                      </div>
+                    ) : messages.length === 0 ? (
+                      <div className="weekly-empty">
+                        Aucun e-mail Emmaüs trouvé sur la période récupérée.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="weekly-status">
+                          {progress && weekRunning
+                            ? `${progress.done} / ${progress.total} analyses effectuées`
+                            : `${messages.length} e-mail${messages.length > 1 ? "s" : ""} reçu${messages.length > 1 ? "s" : ""} sur les ${loadedHours} dernières heures · ${messages.filter((m) => analyses[m.id]).length} résumé${messages.filter((m) => analyses[m.id]).length > 1 ? "s" : ""} disponible${messages.filter((m) => analyses[m.id]).length > 1 ? "s" : ""}`}{" "}
+                          {moreMessages && (
+                            <strong>
+                              · Limite de 50 messages atteinte : tous les
+                              messages ne sont pas inclus.
+                            </strong>
+                          )}
+                        </div>
+                        {messages.some((m) => analyses[m.id]) && (
+                          <div className="weekly-digest">
+                            <h3>En résumé</h3>
+                            <ol>
+                              {messages
+                                .filter((m) => analyses[m.id])
+                                .map((m) => (
+                                  <li key={m.id}>
+                                    <strong>
+                                      {displaySender(
+                                        m.from?.emailAddress?.name,
+                                      )}
+                                    </strong>{" "}
+                                    — {analyses[m.id].resume}
+                                    {analyses[m.id].truncated && (
+                                      <small> · message tronqué</small>
+                                    )}
+                                  </li>
+                                ))}
+                            </ol>
+                            {messages.some(
+                              (m) => analyses[m.id]?.actions?.length > 0,
+                            ) && (
+                              <>
+                                <h3>Actions à faire</h3>
+                                <ul>
+                                  {messages
+                                    .filter((m) => analyses[m.id])
+                                    .flatMap((m) =>
+                                      analyses[m.id].actions.map((x, i) => (
+                                        <li key={m.id + "a" + i}>
+                                          {x}{" "}
+                                          <span>
+                                            —{" "}
+                                            {displaySender(
+                                              m.from?.emailAddress?.name,
+                                            )}
+                                          </span>
+                                        </li>
+                                      )),
+                                    )}
+                                </ul>
+                              </>
+                            )}
+                            {messages.some(
+                              (m) => analyses[m.id]?.echeances?.length > 0,
+                            ) && (
+                              <>
+                                <h3>Échéances à retenir</h3>
+                                <ul>
+                                  {messages
+                                    .filter((m) => analyses[m.id])
+                                    .flatMap((m) =>
+                                      analyses[m.id].echeances.map(
+                                        (x, i) => (
+                                          <li key={m.id + "d" + i}>
+                                            {typeof x === "string"
+                                              ? x
+                                              : x.description}{" "}
+                                            <span>
+                                              —{" "}
+                                              {displaySender(
+                                                m.from?.emailAddress?.name,
+                                              )}
+                                              {typeof x === "object" &&
+                                              !x.date
+                                                ? " · date à vérifier"
+                                                : typeof x === "object"
+                                                  ? " · date reconnue"
+                                                  : ""}
+                                            </span>
+                                          </li>
+                                        ),
+                                      ),
+                                    )}
+                                </ul>
+                              </>
+                            )}
+                            <small>
+                              Résumés générés par IA : vérifiez les
+                              informations importantes dans les e-mails
+                              d’origine.
+                            </small>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </section>
+              )}
+              {nav === "Météo" && (
+                <Weather
+                  city={weatherCity}
+                  onCityChange={changeWeatherCity}
+                  unit={widgetSettings.weatherUnit}
+                  refreshMinutes={widgetSettings.weatherRefresh}
+                />
+              )}
+              {nav === "Devises" && <ExchangeRates />}
+              {nav === "Horloge" && <Clock />}
+              {(nav === "E-mails" || nav === "Agenda") && (
+                <div className="columns single">
+                  {nav === "E-mails" && (
                     <section className="card">
                       <div className="card-head">
                         <div>
@@ -1435,39 +1553,28 @@ function App() {
                               : ""}
                           </p>
                         </div>
-                        {nav === "Vue d’ensemble" ? (
+                        {account && (
                           <button
-                            className="text-link"
-                            onClick={() => navigate("E-mails")}
+                            className="secondary"
+                            onClick={() =>
+                              account.provider === "google"
+                                ? googleSync(true)
+                                : sync(account)
+                            }
+                            disabled={loading || weekRunning}
                           >
-                            Voir tout <ArrowUpRight size={15} />
+                            <RefreshCw size={15} /> Actualiser
                           </button>
-                        ) : (
-                          account && (
-                            <button
-                              className="secondary"
-                              onClick={() =>
-                                account.provider === "google"
-                                  ? googleSync(true)
-                                  : sync(account)
-                              }
-                              disabled={loading || weekRunning}
-                            >
-                              <RefreshCw size={15} /> Actualiser
-                            </button>
-                          )
                         )}
                       </div>
-                      {nav === "E-mails" && (
-                        <div className="search">
-                          <Search size={17} />
-                          <input
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Rechercher dans les messages chargés"
-                          />
-                        </div>
-                      )}
+                      <div className="search">
+                        <Search size={17} />
+                        <input
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder="Rechercher dans les messages chargés"
+                        />
+                      </div>
                       <div className="list">
                         {busyMail && (
                           <Loading
@@ -1477,7 +1584,7 @@ function App() {
                         )}
                         {!busyMail &&
                           filteredMessages
-                            .slice(0, nav === "Vue d’ensemble" ? 3 : 50)
+                            .slice(0, 50)
                             .map((m) => (
                               <div className="mail-row" key={m.id}>
                                 <div
@@ -1529,8 +1636,7 @@ function App() {
                       </div>
                     </section>
                   )}
-                  {((nav === "Vue d’ensemble" && visible.agenda) ||
-                    nav === "Agenda") && (
+                  {nav === "Agenda" && (
                     <section className="card">
                       <div className="card-head">
                         <div>
@@ -1542,18 +1648,10 @@ function App() {
                               : "Échéances locales et rendez-vous"}
                           </p>
                         </div>
-                        {nav === "Vue d’ensemble" && (
-                          <button
-                            className="text-link"
-                            onClick={() => navigate("Agenda")}
-                          >
-                            Voir tout <ArrowUpRight size={15} />
-                          </button>
-                        )}
                       </div>
                       <div className="event-list">
                         {visibleEvents
-                          .slice(0, nav === "Vue d’ensemble" ? 3 : 50)
+                          .slice(0, 50)
                           .map((e) => (
                             <div className="event-row" key={e.id}>
                               <div className="event-date">
@@ -1619,9 +1717,7 @@ function App() {
                   )}
                 </div>
               )}
-              {((nav === "Vue d’ensemble" && visible.tasks) ||
-                nav === "Tâches" ||
-                nav === "Échéances") && (
+              {(nav === "Tâches" || nav === "Échéances") && (
                 <section className="card task-card">
                   <div className="card-head">
                     <div>
@@ -1640,21 +1736,15 @@ function App() {
                     </div>
                     <button
                       className="text-link"
-                      onClick={() =>
-                        nav === "Vue d’ensemble"
-                          ? navigate("Tâches")
-                          : setShowForm(true)
-                      }
+                      onClick={() => setShowForm(true)}
                     >
-                      {nav === "Vue d’ensemble"
-                        ? "Voir toutes les tâches"
-                        : "Ajouter une tâche"}{" "}
+                      Ajouter une tâche{" "}
                       <ArrowUpRight size={15} />
                     </button>
                   </div>
                   <div className="task-list">
                     {shownTasks
-                      .slice(0, nav === "Vue d’ensemble" ? 4 : 100)
+                      .slice(0, 100)
                       .map((t) => (
                         <div
                           className={"task-row " + (t.done ? "done" : "")}
@@ -1722,7 +1812,7 @@ function App() {
               )}
             </>
           )}
-          {nav !== "Paramètres" && (
+          {nav !== dashboard && nav !== "Paramètres" && (
             <footer>
               <span>Votre espace, en toute simplicité.</span>
               <span>POSTE DE PILOTAGE · V1</span>
@@ -1801,9 +1891,9 @@ function App() {
     </div>
   );
 }
-function Stat({ route, icon: Icon, label, value, sub, tone, onOpen }) {
+function Stat({ route, widget, icon: Icon, label, value, sub, tone, onOpen }) {
   return (
-    <button type="button" className="stat" data-widget-route={route} onClick={onOpen} aria-label={`Ouvrir ${label}`}>
+    <button type="button" className="stat" data-widget-route={route} data-widget-id={widget} onClick={onOpen} aria-label={`Ouvrir ${label}`}>
       <div className="stat-top">
         <span className={"stat-icon " + tone}>
           <Icon size={19} />
