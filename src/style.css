@@ -89,11 +89,28 @@ html,body,#root{width:100%;min-height:100%;background:#07090d}body{padding:env(s
 .dashboard-home .main{width:100%;height:100dvh;overflow:hidden}
 .dashboard-home .content{height:100dvh;max-width:none;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px;overflow:hidden}
 .dashboard-home .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
-.dashboard-home .stat{min-height:105px;display:flex;flex-direction:column;justify-content:center;padding:14px;background:linear-gradient(145deg,#171c28,#10141e)}
+.dashboard-home .stat{width:100%;min-height:105px;display:flex;flex-direction:column;justify-content:center;padding:14px;text-align:left;color:inherit;background:linear-gradient(145deg,#171c28,#10141e)}
+.dashboard-home [data-widget-route]{touch-action:pan-y pinch-zoom}
+.dashboard-home .stat:focus-visible,.dashboard-home .detail-tile:focus-visible{outline:3px solid #9c8fff;outline-offset:2px}
 .dashboard-home .stat-value{font-size:clamp(25px,8vw,42px)}
+.dashboard-home .home-details-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(190px,1fr);gap:10px;min-height:0}
+.dashboard-home .detail-tiles{display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:10px;min-height:0}
+.dashboard-home .detail-tile{min-width:0;margin:0;cursor:pointer}
 .dashboard-home .weather-card{height:100%;min-height:0;margin:0;display:flex;flex-direction:column;border-color:#293145}
 .dashboard-home .weather-head{padding:14px 16px 6px}.dashboard-home .weather-content{flex:1;padding:8px 16px 14px;align-content:center}.dashboard-home .weather-days{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}.dashboard-home .weather-day:nth-child(n+4),.dashboard-home .weather-credit,.dashboard-home .weather-search,.dashboard-home .weather-actions .text-link{display:none}
 .dashboard-home .exchange-card,.dashboard-home .month-calendar,.dashboard-home .notes-card,.dashboard-home .links-card,.dashboard-home .weekly-card,.dashboard-home .columns,.dashboard-home .task-card,.dashboard-home footer{display:none}
+.desktop-settings-shortcut{display:none}
+
+/* The widget-only dashboard hides the full navigation. Desktop users still
+   need a visible, keyboard-accessible way to reach settings without swiping. */
+@media (min-width:1001px), (hover:hover) and (pointer:fine){
+  .dashboard-home .content{padding-right:max(74px,env(safe-area-inset-right))}
+  .dashboard-home .desktop-settings-shortcut{position:fixed;top:18px;right:18px;z-index:20;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid #364057;border-radius:13px;background:#111722e8;color:#aeb8ca;box-shadow:0 10px 28px #0007;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  .dashboard-home .desktop-settings-shortcut:hover{background:#1b2331;color:#fff;border-color:#53607a}
+  .dashboard-home .desktop-settings-shortcut:focus-visible{outline:3px solid #9c8fff;outline-offset:3px}
+}
+
+.modal-overlay{z-index:50}
 
 @media (orientation:landscape) and (max-height:550px){
   .dashboard-home .content{padding:10px;grid-template-rows:minmax(0,.82fr) minmax(0,1.18fr);gap:9px}
@@ -101,7 +118,19 @@ html,body,#root{width:100%;min-height:100%;background:#07090d}body{padding:env(s
   .dashboard-home .weather-card{display:grid;grid-template-columns:150px 1fr}.dashboard-home .weather-head{border-right:1px solid #293145;justify-content:center}.dashboard-home .weather-content{flex-wrap:nowrap}
 }
 
+@media (orientation:landscape) and (max-height:550px) and (min-width:1001px),
+       (orientation:landscape) and (max-height:550px) and (hover:hover) and (pointer:fine){
+  .dashboard-home .content{padding-right:max(74px,env(safe-area-inset-right))}
+}
+
 @media (max-width:600px) and (orientation:portrait){
-  .dashboard-home .content{padding:10px}.dashboard-home .summary-grid{gap:8px}.dashboard-home .stat{min-height:96px;padding:12px}.dashboard-home .stat-icon{width:32px;height:32px}.dashboard-home .stat-value{margin-top:8px}.dashboard-home .weather-now{min-width:100%;}.dashboard-home .weather-content{gap:10px}.dashboard-home .weather-head h2{font-size:15px}
+  .dashboard-home{height:auto;min-height:100dvh;overflow:auto}.dashboard-home .main,.dashboard-home .content{height:auto;min-height:100dvh;overflow:visible}.dashboard-home .content{padding:10px}.dashboard-home .summary-grid{gap:8px}.dashboard-home .stat{min-height:96px;padding:12px}.dashboard-home .stat-icon{width:32px;height:32px}.dashboard-home .stat-value{margin-top:8px}.dashboard-home .home-details-grid{grid-template-columns:1fr}.dashboard-home .detail-tiles{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none}.dashboard-home .weather-now{min-width:100%;}.dashboard-home .weather-content{gap:10px}.dashboard-home .weather-head h2{font-size:15px}
   .dashboard-section .sidebar{width:50px;padding:12px 6px}.dashboard-section .topbar{height:52px;padding:0 11px}.dashboard-section .status{display:none}.dashboard-section .content{padding:16px 11px}.dashboard-section .summary-grid{grid-template-columns:1fr 1fr}.dashboard-section .card-head{padding:17px 15px}.dashboard-section .list,.dashboard-section .event-list,.dashboard-section .task-list{padding-left:15px;padding-right:15px}
 }
+
+.detail-back{display:inline-flex;align-items:center;gap:7px;margin:0 0 14px;padding:8px 11px;border:1px solid #30394b;border-radius:9px;background:#111722;color:#cbd2df;font-weight:700}
+.detail-tile{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:15px;border:1px solid #293145;background:linear-gradient(145deg,#171c28,#10141e);color:#eef2f8;text-align:left}
+.detail-tile-icon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:#2d2852;color:#c2b9ff}.detail-tile span:nth-child(2){min-width:0}.detail-tile small,.detail-tile strong,.detail-tile em{display:block}.detail-tile small{font-size:9px;letter-spacing:1px;color:#8792a7}.detail-tile strong{font:800 17px Manrope,sans-serif;margin:4px 0}.detail-tile em{font-size:10px;color:#9aa5b8;font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clock-page{min-height:430px;display:flex;align-items:center;justify-content:center;gap:clamp(32px,8vw,100px);padding:42px}.clock-face{position:relative;width:min(42vw,300px);aspect-ratio:1;border:8px solid #252d3d;border-radius:50%;background:radial-gradient(circle,#171e2a,#090d14);box-shadow:inset 0 0 0 2px #39445b,0 24px 60px #0007}.clock-face:before{content:"";position:absolute;inset:12px;border-radius:50%;background:repeating-conic-gradient(from -1deg,#94a0b5 0 2deg,transparent 2deg 30deg);mask:radial-gradient(circle,transparent 0 91%,#000 92%)}.clock-face b{position:absolute;left:50%;top:50%;width:14px;height:14px;border-radius:50%;background:#f1f4f8;transform:translate(-50%,-50%);z-index:3}.clock-hand{position:absolute;left:calc(50% - 2px);bottom:50%;width:4px;border-radius:5px;transform-origin:50% 100%;background:#eef2f8}.clock-hand.hour{height:26%}.clock-hand.minute{height:36%}.clock-hand.second{left:calc(50% - 1px);width:2px;height:39%;background:#ef6a72}.clock-copy{text-align:center}.clock-digital{font:800 clamp(46px,9vw,86px) Manrope,sans-serif;letter-spacing:-4px;color:#f7f9fc;font-variant-numeric:tabular-nums}.clock-copy p{font-size:17px;text-transform:capitalize;color:#b6c0d0}.clock-copy small{color:#7f8ba0}
+@media(max-width:600px){.clock-page{min-height:0;flex-direction:column;padding:24px 16px}.clock-face{width:min(72vw,260px)}.clock-digital{letter-spacing:-2px}}
+@media(prefers-reduced-motion:reduce){.clock-hand.second{display:none}}

@@ -18,6 +18,7 @@ import {
   Bell,
   Plus,
   ArrowUpRight,
+  ArrowLeft,
   ChevronRight,
   Sparkles,
   X,
@@ -32,6 +33,7 @@ import { importedItems, mergeById } from "./lib/automation.js";
 import Weather from "./widgets/Weather.jsx";
 import MonthlyCalendar from "./widgets/MonthlyCalendar.jsx";
 import ExchangeRates from "./widgets/ExchangeRates.jsx";
+import Clock from "./widgets/Clock.jsx";
 import QuickNotes from "./widgets/QuickNotes.jsx";
 import UsefulLinks from "./widgets/UsefulLinks.jsx";
 import WidgetSettings from "./widgets/WidgetSettings.jsx";
@@ -78,6 +80,9 @@ const msal = clientId
     })
   : null;
 const day = new Date();
+const routes={"Vue d’ensemble":"","E-mails":"emails",Agenda:"agenda",Tâches:"taches",Échéances:"echeances",Paramètres:"parametres",Météo:"meteo",Devises:"devises",Horloge:"horloge"};
+const routeNames=Object.fromEntries(Object.entries(routes).map(([name,route])=>[route,name]));
+const navFromHash=()=>routeNames[window.location.hash.replace(/^#\/?/,'')]||"Vue d’ensemble";
 const dateISO = (d) => {
   const copy = new Date(d);
   copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset());
@@ -159,6 +164,7 @@ function App() {
     [widgetSaveError, setWidgetSaveError] = useState(false),
     [syncStatus, setSyncStatus] = useState("idle");
   const [settingsActionsTarget, setSettingsActionsTarget] = useState(null);
+  const settingsHeadingRef = useRef(null);
   const settingsRef = useRef(widgetSettings);
   settingsRef.current = widgetSettings;
   const [weatherCity, setWeatherCity] = useState(() => {
@@ -272,7 +278,7 @@ function App() {
   const [weekRunning, setWeekRunning] = useState(false),
     [progress, setProgress] = useState(null),
     [moreMessages, setMoreMessages] = useState(false);
-  const [nav, setNav] = useState("Vue d’ensemble"),
+  const [nav, setNav] = useState(navFromHash),
     [tasks, setTasks] = useState(loadTasks),
     [showForm, setShowForm] = useState(false),
     [title, setTitle] = useState(""),
@@ -287,6 +293,17 @@ function App() {
     [mailError, setMailError] = useState(false),
     [error, setError] = useState(""),
     [search, setSearch] = useState("");
+  const previousNav = useRef(nav);
+  useEffect(() => {
+    if (nav !== "Vue d’ensemble") {
+      settingsHeadingRef.current?.focus();
+    } else if (previousNav.current !== nav) {
+      document.querySelector(`[data-widget-route="${routes[previousNav.current]}"]`)?.focus();
+    }
+    previousNav.current = nav;
+  }, [nav]);
+  useEffect(()=>{const changed=()=>setNav(navFromHash());window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed)},[]);
+  function navigate(name){const safe=Object.hasOwn(routes,name)?name:"Vue d’ensemble";const hash=routes[safe]?`#/${routes[safe]}`:'#/';if(window.location.hash!==hash)history.pushState(null,'',hash);setNav(safe)}
   function refreshLocal() {
     setTasks(loadTasks());
     setLocalDeadlines(loadLocal("pilotage.deadlines.v1"));
@@ -455,7 +472,7 @@ function App() {
       setError(
         "Configure VITE_MICROSOFT_CLIENT_ID dans Vercel ou dans le fichier .env.local avant de te connecter.",
       );
-      setNav("Paramètres");
+      navigate("Paramètres");
       return;
     }
     setLoading(true);
@@ -493,6 +510,9 @@ function App() {
           expired = true;
           setGoogleToken(null);
           setAccount(null);
+          setMessages([]);
+          setEvents([]);
+          setMoreMessages(false);
           throw new Error("La connexion Google a expiré. Reconnecte ton compte.");
         }
         throw new Error(
@@ -554,13 +574,16 @@ function App() {
     } catch (e) {
       setLoading(false);
       setError(e?.code === "auth/popup-closed-by-user" ? "Connexion Google annulée." : e.message || "Connexion Google impossible.");
-      setNav("Paramètres");
+      navigate("Paramètres");
     }
   }
 
   function onTouchStart(event) {
     swipeStart.current = null;
-    if (event.touches.length !== 1 || event.target.closest?.("button,a,input,select,textarea,label,[role=button],[contenteditable],[data-no-swipe]")) return;
+    if (showForm) return;
+    if (event.touches.length !== 1) return;
+    const control = event.target.closest?.("button,a,input,select,textarea,label,[role=button],[role=link],[contenteditable],[data-no-swipe]");
+    if (control && !(nav === "Vue d’ensemble" && control.hasAttribute("data-widget-route"))) return;
     const { identifier, clientX, clientY } = event.touches[0];
     if (clientX < 24 || clientX > window.innerWidth - 24) return;
     swipeStart.current = { identifier, x: clientX, y: clientY };
@@ -573,13 +596,17 @@ function App() {
   }
   function onTouchEnd(event) {
     const start = swipeStart.current; swipeStart.current = null;
+    if (showForm) return;
     if (!start || event.touches.length) return;
     const touch = Array.from(event.changedTouches).find(x => x.identifier === start.identifier);
     if (!touch) return;
     const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
     if (Math.abs(dx) < 64 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
-    if (nav === "Vue d’ensemble" && dx < 0) setNav("Paramètres");
-    else if (nav === "Paramètres" && dx > 0) setNav("Vue d’ensemble");
+    if (nav === "Vue d’ensemble" && dx < 0) {
+      if (event.cancelable) event.preventDefault();
+      navigate("Paramètres");
+    }
+    else if (nav === "Paramètres" && dx > 0) navigate("Vue d’ensemble");
   }
 
   async function disconnect() {
@@ -784,6 +811,9 @@ function App() {
     Tâches: "Mes tâches",
     Échéances: "Mes échéances",
     Paramètres: "Paramètres",
+    Météo: "Météo",
+    Devises: "Devises",
+    Horloge: "Horloge",
   };
   return (
     <div
@@ -814,7 +844,7 @@ function App() {
             <button
               key={name}
               className={"nav-item " + (nav === name ? "active" : "")}
-              onClick={() => setNav(name)}
+              onClick={() => navigate(name)}
             >
               <Icon size={18} />
               <span>{name}</span>
@@ -827,7 +857,7 @@ function App() {
         <div className="side-bottom">
           <button
             className={"nav-item " + (nav === "Paramètres" ? "active" : "")}
-            onClick={() => setNav("Paramètres")}
+            onClick={() => navigate("Paramètres")}
           >
             <Settings size={18} /> Paramètres
           </button>
@@ -840,6 +870,17 @@ function App() {
           </div>
         </div>
       </aside>
+      {!showForm && (
+        <button
+          type="button"
+          className="desktop-settings-shortcut"
+          aria-label="Ouvrir les paramètres"
+          title="Paramètres"
+          onClick={() => navigate("Paramètres")}
+        >
+          <Settings size={20} aria-hidden="true" />
+        </button>
+      )}
       <main className="main">
         <header className="topbar">
           <div className="breadcrumb">
@@ -862,7 +903,7 @@ function App() {
             <button
               className="icon-button"
               aria-label="Paramètres"
-              onClick={() => setNav("Paramètres")}
+              onClick={() => navigate("Paramètres")}
             >
               <Settings size={18} />
             </button>
@@ -872,12 +913,16 @@ function App() {
           </div>
         </header>
         <div className="content">
+          {["E-mails","Météo","Devises","Horloge","Tâches"].includes(nav)&&<button type="button" className="detail-back" onClick={()=>navigate("Vue d’ensemble")}><ArrowLeft size={16}/> Tableau de bord</button>}
           <div className="intro">
             <div>
               <div className="eyebrow">
                 TON ESPACE DE TRAVAIL <span>✳</span>
               </div>
-              <h1>
+              <h1
+                ref={nav !== "Vue d’ensemble" ? settingsHeadingRef : null}
+                tabIndex={nav !== "Vue d’ensemble" ? -1 : undefined}
+              >
                 {nav === "Vue d’ensemble"
                   ? `Bonjour${account?.name ? ", " + account.name.split(" ")[0] : ""} 👋`
                   : sectionTitle[nav]}
@@ -1085,6 +1130,8 @@ function App() {
                               : "Expéditeurs @emmaus-scherwiller.fr"
                           }
                           tone="purple"
+                          route={routes["E-mails"]}
+                          onOpen={() => navigate("E-mails")}
                         />
                       )}
                       {visible.statAgenda && (
@@ -1099,6 +1146,8 @@ function App() {
                           }
                           sub="Agenda de l’application"
                           tone="blue"
+                          route={routes["Agenda"]}
+                          onOpen={() => navigate("Agenda")}
                         />
                       )}
                       {visible.statTasks && (
@@ -1108,6 +1157,8 @@ function App() {
                           value={openTasks.length}
                           sub="À garder à l’œil"
                           tone="orange"
+                          route={routes["Tâches"]}
+                          onOpen={() => navigate("Tâches")}
                         />
                       )}
                       {visible.statLate && (
@@ -1119,19 +1170,32 @@ function App() {
                             late ? "À traiter en priorité" : "Tout est à jour"
                           }
                           tone="green"
+                          route={routes["Échéances"]}
+                          onOpen={() => navigate("Échéances")}
                         />
                       )}
                     </div>
                   )}
-                  {visible.weather && (
-                    <Weather
-                      city={weatherCity}
-                      onCityChange={changeWeatherCity}
-                      unit={widgetSettings.weatherUnit}
-                      refreshMinutes={widgetSettings.weatherRefresh}
-                    />
-                  )}
-                  {visible.exchangeRates && <ExchangeRates />}
+                  <div className="home-details-grid">
+                    {visible.weather && (
+                      <Weather
+                        city={weatherCity}
+                        onCityChange={changeWeatherCity}
+                        unit={widgetSettings.weatherUnit}
+                        refreshMinutes={widgetSettings.weatherRefresh}
+                        compact
+                        onOpen={() => navigate("Météo")}
+                      />
+                    )}
+                    <div className="detail-tiles">
+                      {visible.exchangeRates && (
+                        <ExchangeRates compact onOpen={() => navigate("Devises")}/>
+                      )}
+                      {visible.clock && (
+                        <Clock compact onOpen={() => navigate("Horloge")}/>
+                      )}
+                    </div>
+                  </div>
                   {visible.monthlyCalendar && (
                     <MonthlyCalendar
                       deadlines={localDeadlines}
@@ -1140,8 +1204,8 @@ function App() {
                       outlook={account?.provider === "microsoft"}
                       loading={busyMail}
                       syncStatus={syncStatus}
-                      onOpenAgenda={() => setNav("Agenda")}
-                      onOpenTasks={() => setNav("Tâches")}
+                      onOpenAgenda={() => navigate("Agenda")}
+                      onOpenTasks={() => navigate("Tâches")}
                     />
                   )}
                   {visible.notes && <QuickNotes />}
@@ -1333,6 +1397,9 @@ function App() {
                   )}
                 </>
               )}
+              {nav === "Météo"&&<Weather city={weatherCity} onCityChange={changeWeatherCity} unit={widgetSettings.weatherUnit} refreshMinutes={widgetSettings.weatherRefresh}/>}
+              {nav === "Devises"&&<ExchangeRates/>}
+              {nav === "Horloge"&&<Clock/>}
               {((nav === "Vue d’ensemble" &&
                 (visible.emails || visible.agenda)) ||
                 nav === "E-mails" ||
@@ -1366,7 +1433,7 @@ function App() {
                         {nav === "Vue d’ensemble" ? (
                           <button
                             className="text-link"
-                            onClick={() => setNav("E-mails")}
+                            onClick={() => navigate("E-mails")}
                           >
                             Voir tout <ArrowUpRight size={15} />
                           </button>
@@ -1473,7 +1540,7 @@ function App() {
                         {nav === "Vue d’ensemble" && (
                           <button
                             className="text-link"
-                            onClick={() => setNav("Agenda")}
+                            onClick={() => navigate("Agenda")}
                           >
                             Voir tout <ArrowUpRight size={15} />
                           </button>
@@ -1570,7 +1637,7 @@ function App() {
                       className="text-link"
                       onClick={() =>
                         nav === "Vue d’ensemble"
-                          ? setNav("Tâches")
+                          ? navigate("Tâches")
                           : setShowForm(true)
                       }
                     >
@@ -1727,9 +1794,9 @@ function App() {
     </div>
   );
 }
-function Stat({ icon: Icon, label, value, sub, tone }) {
+function Stat({ route, icon: Icon, label, value, sub, tone, onOpen }) {
   return (
-    <div className="stat">
+    <button type="button" className="stat" data-widget-route={route} onClick={onOpen} aria-label={`Ouvrir ${label}`}>
       <div className="stat-top">
         <span className={"stat-icon " + tone}>
           <Icon size={19} />
@@ -1739,7 +1806,7 @@ function Stat({ icon: Icon, label, value, sub, tone }) {
       <div className="stat-value">{value}</div>
       <div className="stat-label">{label}</div>
       <div className="stat-sub">{sub}</div>
-    </div>
+    </button>
   );
 }
 function Empty({ text }) {
