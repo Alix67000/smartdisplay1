@@ -1,0 +1,495 @@
+.content.settings-page {
+  --settings-ink: #f4f7ff;
+  --settings-muted: #adb8cb;
+  --settings-surface: #111722;
+  --settings-control: #0d121b;
+  --settings-line: #2d3547;
+  --settings-accent: #bfb2ff;
+  --settings-spacing: clamp(14px, 2vw, 22px);
+  --settings-panel-padding: clamp(14px, 2vw, 22px);
+  display: grid;
+  gap: var(--settings-spacing);
+  width: 100%;
+  max-width: 860px;
+  padding: clamp(14px, 3vw, 32px) clamp(14px, 3vw, 32px) 32px;
+  color: var(--settings-ink);
+}
+
+.settings-page [hidden] {
+  display: none;
+}
+
+.settings-page-heading {
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.settings-page-heading h1 {
+  margin: 0;
+  font: 800 clamp(28px, 4vw, 38px)/1.15 Manrope, system-ui, sans-serif;
+  letter-spacing: -.045em;
+}
+
+.settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--settings-line);
+  border-radius: 9px;
+  background: var(--settings-surface);
+  color: var(--settings-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-page .settings-panel {
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: var(--settings-panel-padding);
+  border: 1px solid var(--settings-line);
+  border-radius: 16px;
+  background: var(--settings-surface);
+}
+
+.settings-panel h2,
+.settings-panel h3,
+.settings-panel h4 {
+  margin: 0;
+  line-height: 1.3;
+}
+
+.settings-panel h2 {
+  margin-bottom: 12px;
+  font: 800 21px/1.25 Manrope, system-ui, sans-serif;
+  letter-spacing: -.035em;
+}
+
+.settings-panel h3 {
+  font-size: 15px;
+}
+
+.settings-panel h4 {
+  font-size: 13px;
+}
+
+.settings-service {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.settings-service + .settings-service {
+  border-top: 1px solid var(--settings-line);
+}
+
+.settings-service-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #272343;
+  color: var(--settings-accent);
+}
+
+.settings-service-copy p,
+.settings-hint,
+.settings-disclosure-body,
+.settings-sync-state {
+  margin: 0;
+  color: var(--settings-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.settings-service-copy p {
+  margin-top: 3px;
+}
+
+.settings-page button,
+.settings-page summary,
+.settings-page select {
+  min-height: 44px;
+}
+
+.settings-page .primary,
+.settings-page .secondary {
+  max-width: 100%;
+  font-size: 13px;
+  white-space: normal;
+}
+
+.settings-page button:disabled {
+  cursor: default;
+}
+
+.settings-page :is(button, summary, input, select):focus-visible,
+.settings-page .weather-input:focus-within,
+.settings-page-actions [tabindex="-1"]:focus-visible {
+  outline: 2px solid var(--settings-accent);
+  outline-offset: 3px;
+}
+
+.settings-page .error {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-page .error > svg {
+  flex: none;
+}
+
+.settings-page .error button {
+  min-width: 44px;
+}
+
+.settings-disclosure {
+  border-top: 1px solid var(--settings-line);
+  margin-top: 8px;
+}
+
+.settings-disclosure > summary {
+  padding: 12px 0;
+  color: var(--settings-accent);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-disclosure > summary::marker {
+  color: var(--settings-accent);
+}
+
+.settings-disclosure-body p {
+  margin: 0 0 8px;
+}
+
+.settings-panel > .settings-disclosure:last-child:not([open]) {
+  margin-bottom: calc(-1 * var(--settings-panel-padding) + 4px);
+}
+
+.settings-widget-groups,
+.settings-widget-options {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-widget-groups {
+  padding: 4px 0 16px;
+}
+
+.settings-widget-groups fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-widget-groups legend {
+  padding: 0 0 4px;
+  color: var(--settings-ink);
+  font-weight: 700;
+}
+
+.settings-page .widget-toggle {
+  min-height: 44px;
+  padding: 8px 0;
+  border-color: var(--settings-line);
+  color: var(--settings-ink);
+}
+
+.settings-page .widget-toggle input {
+  appearance: none;
+  position: relative;
+  width: 38px;
+  height: 23px;
+  margin: 0;
+  border: 1px solid #64728a;
+  border-radius: 99px;
+  background: #2b3446;
+  cursor: pointer;
+}
+
+.settings-page .widget-toggle input::after {
+  position: absolute;
+  inset: 3px auto 3px 3px;
+  width: 15px;
+  border-radius: 50%;
+  background: #e9ecf7;
+  content: '';
+}
+
+.settings-page .widget-toggle input:checked {
+  border-color: #8074ec;
+  background: #6055d8;
+}
+
+.settings-page .widget-toggle input:checked::after {
+  transform: translateX(15px);
+}
+
+.settings-widget-options {
+  padding-top: 12px;
+  border-top: 1px solid var(--settings-line);
+}
+
+.settings-widget-option {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.settings-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--settings-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-field select {
+  width: 100%;
+  color-scheme: dark;
+  padding: 8px;
+  border: 1px solid #495469;
+  border-radius: 8px;
+  background: var(--settings-control);
+  color: var(--settings-ink);
+  font-weight: 400;
+}
+
+.settings-current-city {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--settings-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.settings-current-city svg {
+  flex: none;
+}
+
+.settings-weather-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+  align-items: end;
+  gap: 8px;
+}
+
+.settings-page .weather-search {
+  position: relative;
+  padding: 0;
+}
+
+.settings-page .weather-search form {
+  max-width: none;
+}
+
+.settings-page .weather-input {
+  border-color: #495469;
+}
+
+.settings-page .weather-input input {
+  min-height: 42px;
+  padding: 6px 0;
+  font-size: 16px;
+}
+
+.settings-page .weather-input input:focus-visible {
+  outline: none;
+}
+
+.settings-page .weather-input svg {
+  flex: none;
+}
+
+.settings-page .weather-results,
+.settings-page .weather-results button {
+  border-color: var(--settings-line);
+  background: var(--settings-control);
+  color: var(--settings-ink);
+  font-size: 13px;
+}
+
+.settings-page .weather-results button:is(:hover, :focus-visible) {
+  background: #20283a;
+  outline-offset: -2px;
+}
+
+.settings-page .weather-results p {
+  padding-inline: 10px;
+  color: var(--settings-muted);
+}
+
+.settings-alert {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #713e46;
+  border-radius: 9px;
+  background: #321b1e;
+  color: #ffb8b3;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-draft-conflict p {
+  margin: 0 0 8px;
+}
+
+.settings-page-actions {
+  margin: 0;
+}
+
+.settings-page .settings-save-panel {
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px var(--settings-panel-padding);
+  border: 1px solid var(--settings-line);
+  background: var(--settings-surface);
+  box-shadow: none;
+}
+
+.settings-page .settings-dialog {
+  max-height: min(calc(100dvh - 40px), 700px);
+  overscroll-behavior: contain;
+}
+
+.settings-page .settings-dialog h2 {
+  margin-top: 0;
+}
+
+.settings-page .settings-dialog-actions {
+  flex-flow: row wrap;
+}
+
+.settings-page .settings-dialog-actions button {
+  width: auto;
+  flex: 1 1 115px;
+}
+
+.settings-sync-state p {
+  margin: 0;
+}
+
+.settings-sync-state .settings-sync-identity {
+  color: var(--settings-ink);
+  font-weight: 700;
+}
+
+.settings-sync-block {
+  margin-top: 12px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--settings-line);
+}
+
+.settings-sync-block .settings-hint {
+  margin-top: 4px;
+}
+
+.settings-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.settings-sync-conflict {
+  padding: 12px;
+  border: 1px solid var(--settings-line);
+  border-radius: 9px;
+  margin-top: 8px;
+}
+
+.settings-sync-conflict p {
+  margin: 8px 0;
+  color: var(--settings-muted);
+  font-size: 13px;
+}
+
+.settings-sync-conflict code {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--settings-ink);
+}
+
+@media (min-width: 660px) {
+  .settings-widget-groups {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  .settings-widget-options {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 24px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app:has(.settings-page) > .sidebar {
+    display: none;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 550px) {
+  .settings-page-heading {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 550px) and (min-width: 720px) {
+  .content.settings-page {
+    padding-top: 16px;
+  }
+
+  .settings-service-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+    gap: 16px;
+  }
+
+  .settings-service + .settings-service {
+    border-top: 0;
+    border-left: 1px solid var(--settings-line);
+    padding-left: 16px;
+  }
+}
+
+@media (max-width: 350px) {
+  .settings-service {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .settings-service > button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (forced-colors: active) {
+  .settings-page .widget-toggle input {
+    appearance: auto;
+    width: 20px;
+  }
+
+  .settings-page .widget-toggle input::after {
+    content: none;
+  }
+}

@@ -165,6 +165,8 @@ function App() {
     [syncStatus, setSyncStatus] = useState("idle");
   const [settingsActionsTarget, setSettingsActionsTarget] = useState(null);
   const settingsHeadingRef = useRef(null);
+  const swipePanel = useRef(null);
+  const swipeArrival = useRef(0);
   const settingsRef = useRef(widgetSettings);
   settingsRef.current = widgetSettings;
   const [weatherCity, setWeatherCity] = useState(() => {
@@ -299,6 +301,13 @@ function App() {
       settingsHeadingRef.current?.focus();
     } else if (previousNav.current !== nav) {
       document.querySelector(`[data-widget-route="${routes[previousNav.current]}"]`)?.focus();
+    }
+    if (swipeArrival.current) {
+      swipePanel.current?.animate?.(
+        [{ transform: `translateX(${swipeArrival.current}px)` }, { transform: "translateX(0)" }],
+        { duration: 240, easing: "cubic-bezier(.2,.75,.25,1)" },
+      );
+      swipeArrival.current = 0;
     }
     previousNav.current = nav;
   }, [nav]);
@@ -573,14 +582,20 @@ function App() {
       window.location.assign(data.url);
     } catch (e) {
       setLoading(false);
-      setError(e?.code === "auth/popup-closed-by-user" ? "Connexion Google annulée." : e.message || "Connexion Google impossible.");
+      const messages = {
+        "auth/popup-closed-by-user": "Connexion Google annulée.",
+        "auth/popup-blocked": "Autorisez les fenêtres surgissantes pour connecter Google, puis réessayez.",
+        "auth/unauthorized-domain": "Ce domaine doit être autorisé dans la configuration de connexion Google de Smart Display.",
+      };
+      setError(messages[e?.code] || e.message || "Connexion Google impossible.");
       navigate("Paramètres");
     }
   }
 
   function onTouchStart(event) {
-    swipeStart.current = null;
-    if (showForm) return;
+    resetSwipe();
+    if (showForm || event.currentTarget.querySelector('[aria-modal="true"]')) return;
+    if (nav !== "Vue d’ensemble" && nav !== "Paramètres") return;
     if (event.touches.length !== 1) return;
     const control = event.target.closest?.("button,a,input,select,textarea,label,[role=button],[role=link],[contenteditable],[data-no-swipe]");
     if (control && !(nav === "Vue d’ensemble" && control.hasAttribute("data-widget-route"))) return;
@@ -591,22 +606,50 @@ function App() {
   function onTouchMove(event) {
     const start = swipeStart.current, touch = event.touches[0];
     if (!start || event.touches.length !== 1 || touch.identifier !== start.identifier) return;
-    const dx = Math.abs(touch.clientX - start.x), dy = Math.abs(touch.clientY - start.y);
-    if (dy >= 12 && dy >= dx) swipeStart.current = null;
+    const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
+    if (!start.dragging && Math.abs(dy) >= 12 && Math.abs(dy) >= Math.abs(dx)) {
+      resetSwipe();
+      return;
+    }
+    if (!start.dragging && (Math.abs(dx) < 10 || Math.abs(dx) < 1.5 * Math.abs(dy))) return;
+    const direction = nav === "Vue d’ensemble" ? -1 : 1;
+    if (!start.dragging && dx * direction <= 0) return;
+    start.dragging = true;
+    if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+      const offset = direction * Math.min(Math.max(0, dx * direction), window.innerWidth * 0.55);
+      swipePanel.current?.style.setProperty("--swipe-offset", `${offset}px`);
+    }
+  }
+  function resetSwipe(animate = false) {
+    swipeStart.current = null;
+    const panel = swipePanel.current;
+    const offset = panel?.style.getPropertyValue("--swipe-offset");
+    panel?.style.removeProperty("--swipe-offset");
+    if (animate && offset) {
+      panel.animate?.(
+        [{ transform: `translateX(${offset})` }, { transform: "translateX(0)" }],
+        { duration: 190, easing: "ease-out" },
+      );
+    }
   }
   function onTouchEnd(event) {
-    const start = swipeStart.current; swipeStart.current = null;
-    if (showForm) return;
-    if (!start || event.touches.length) return;
-    const touch = Array.from(event.changedTouches).find(x => x.identifier === start.identifier);
-    if (!touch) return;
-    const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
-    if (Math.abs(dx) < 64 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
-    if (nav === "Vue d’ensemble" && dx < 0) {
-      if (event.cancelable) event.preventDefault();
-      navigate("Paramètres");
+    const start = swipeStart.current;
+    const touch = Array.from(event.changedTouches).find(item => item.identifier === start?.identifier);
+    if (!touch || event.touches.length || showForm || event.currentTarget.querySelector('[aria-modal="true"]')) {
+      resetSwipe(true);
+      return;
     }
-    else if (nav === "Paramètres" && dx > 0) navigate("Vue d’ensemble");
+    const dx = touch.clientX - start.x, dy = touch.clientY - start.y;
+    const horizontalSwipe = Math.abs(dx) >= 64 && Math.abs(dx) >= 1.5 * Math.abs(dy);
+    const destination = nav === "Vue d’ensemble" && dx < 0 ? "Paramètres"
+      : nav === "Paramètres" && dx > 0 ? "Vue d’ensemble" : null;
+    resetSwipe(!destination || !horizontalSwipe);
+    if (!destination || !horizontalSwipe) return;
+    if (event.cancelable) event.preventDefault();
+    if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+      swipeArrival.current = -Math.sign(dx) * Math.min(window.innerWidth * 0.3, 240);
+    }
+    navigate(destination);
   }
 
   async function disconnect() {
@@ -824,7 +867,7 @@ function App() {
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      onTouchCancel={() => { swipeStart.current = null; }}
+      onTouchCancel={() => resetSwipe(true)}
     >
       <aside className="sidebar">
         <div className="brand">
@@ -881,78 +924,83 @@ function App() {
           <Settings size={20} aria-hidden="true" />
         </button>
       )}
-      <main className="main">
-        <header className="topbar">
-          <div className="breadcrumb">
-            Espace de travail <ChevronRight size={14} />{" "}
-            <strong>{sectionTitle[nav]}</strong>
-          </div>
-          <div className="header-right">
-            <span className={"status " + (account ? "connected" : "")}>
-              <i />
-              {busyMail
-                ? "Chargement…"
-                : account
-                  ? account.provider === "google"
-                    ? "Gmail connecté"
-                    : "Microsoft connecté"
-                  : sessionUnavailable
-                    ? "Vérification indisponible"
-                    : "Messagerie non connectée"}
-            </span>
-            <button
-              className="icon-button"
-              aria-label="Paramètres"
-              onClick={() => navigate("Paramètres")}
-            >
-              <Settings size={18} />
-            </button>
-            <div className="avatar small">
-              {account?.name?.charAt(0) || "IT"}
+      <main
+        ref={swipePanel}
+        className={nav === "Vue d’ensemble" || nav === "Paramètres" ? "main swipe-panel" : "main"}
+      >
+        {nav !== "Paramètres" && (
+          <header className="topbar">
+            <div className="breadcrumb">
+              Espace de travail <ChevronRight size={14} />{" "}
+              <strong>{sectionTitle[nav]}</strong>
             </div>
-          </div>
-        </header>
-        <div className="content">
-          {["E-mails","Météo","Devises","Horloge","Tâches"].includes(nav)&&<button type="button" className="detail-back" onClick={()=>navigate("Vue d’ensemble")}><ArrowLeft size={16}/> Tableau de bord</button>}
-          <div className="intro">
-            <div>
-              <div className="eyebrow">
-                TON ESPACE DE TRAVAIL <span>✳</span>
-              </div>
-              <h1
-                ref={nav !== "Vue d’ensemble" ? settingsHeadingRef : null}
-                tabIndex={nav !== "Vue d’ensemble" ? -1 : undefined}
-              >
-                {nav === "Vue d’ensemble"
-                  ? `Bonjour${account?.name ? ", " + account.name.split(" ")[0] : ""} 👋`
-                  : sectionTitle[nav]}
-              </h1>
-              <p>
-                {nav === "Vue d’ensemble"
-                  ? "Voici ce qui se passe dans votre journée."
-                  : nav === "Paramètres"
-                    ? "Configurez votre espace et vos connexions."
-                    : "Retrouvez les informations importantes au même endroit."}
-              </p>
-            </div>
-            <div className="intro-actions">
-              <span className="today">
-                <CalendarDays size={16} />
-                {fmt(day, { weekday: "long", day: "numeric", month: "long" })}
+            <div className="header-right">
+              <span className={"status " + (account ? "connected" : "")}>
+                <i />
+                {busyMail
+                  ? "Chargement…"
+                  : account
+                    ? account.provider === "google"
+                      ? "Gmail connecté"
+                      : "Microsoft connecté"
+                    : sessionUnavailable
+                      ? "Vérification indisponible"
+                      : "Messagerie non connectée"}
               </span>
-              <button className="primary" onClick={() => setShowForm(true)}>
-                <Plus size={17} /> Nouvelle tâche
+              <button
+                className="icon-button"
+                aria-label="Paramètres"
+                onClick={() => navigate("Paramètres")}
+              >
+                <Settings size={18} />
               </button>
+              <div className="avatar small">
+                {account?.name?.charAt(0) || "IT"}
+              </div>
             </div>
-          </div>
-          <React.Suspense fallback={null}>
-            <SyncAccount
-              visible={nav === "Paramètres"}
-              onApplied={refreshLocal}
-              onStatusChange={setSyncStatus}
-            />
-          </React.Suspense>
-          {["connecting", "working", "waiting"].includes(syncStatus) && (
+          </header>
+        )}
+        <div className={nav === "Paramètres" ? "content settings-page" : "content"}>
+          {["E-mails","Météo","Devises","Horloge","Tâches"].includes(nav)&&<button type="button" className="detail-back" onClick={()=>navigate("Vue d’ensemble")}><ArrowLeft size={16}/> Tableau de bord</button>}
+          {nav === "Paramètres" ? (
+            <header className="settings-page-heading">
+              <button type="button" className="settings-back" onClick={() => navigate("Vue d’ensemble")}>
+                <ArrowLeft size={17} aria-hidden="true" /> Tableau de bord
+              </button>
+              <h1 ref={settingsHeadingRef} tabIndex={-1}>Paramètres</h1>
+            </header>
+          ) : (
+            <div className="intro">
+              <div>
+                <div className="eyebrow">
+                  TON ESPACE DE TRAVAIL <span>✳</span>
+                </div>
+                <h1
+                  ref={nav !== "Vue d’ensemble" ? settingsHeadingRef : null}
+                  tabIndex={nav !== "Vue d’ensemble" ? -1 : undefined}
+                >
+                  {nav === "Vue d’ensemble"
+                    ? `Bonjour${account?.name ? ", " + account.name.split(" ")[0] : ""} 👋`
+                    : sectionTitle[nav]}
+                </h1>
+                <p>
+                  {nav === "Vue d’ensemble"
+                    ? "Voici ce qui se passe dans votre journée."
+                    : "Retrouvez les informations importantes au même endroit."}
+                </p>
+              </div>
+              <div className="intro-actions">
+                <span className="today">
+                  <CalendarDays size={16} />
+                  {fmt(day, { weekday: "long", day: "numeric", month: "long" })}
+                </span>
+                <button className="primary" onClick={() => setShowForm(true)}>
+                  <Plus size={17} /> Nouvelle tâche
+                </button>
+              </div>
+            </div>
+          )}
+          {nav !== "Paramètres" && ["connecting", "working", "waiting"].includes(syncStatus) && (
             <Loading
               label={
                 syncStatus === "waiting"
@@ -963,7 +1011,7 @@ function App() {
             />
           )}
           {error && (
-            <div className="error">
+            <div className="error" role={nav === "Paramètres" ? "alert" : undefined}>
               <AlertCircle size={17} />
               <span>{error}</span>
               <button onClick={() => setError("")} aria-label="Fermer">
@@ -985,6 +1033,66 @@ function App() {
                 </button>
               </div>
             )}
+          {nav === "Paramètres" && (
+            <section className="settings-panel settings-card" aria-labelledby="settings-accounts-title">
+              <h2 id="settings-accounts-title">Comptes</h2>
+              <div className="settings-service-list">
+                <div className="settings-service">
+                  <div className="settings-service-icon" aria-hidden="true">
+                    <Mail size={19} />
+                  </div>
+                  <div className="settings-service-copy">
+                    <h3>Google</h3>
+                    <p>
+                      {account?.provider === "google" ? account.username
+                        : checkingSession ? "Vérification…"
+                        : sessionUnavailable ? "Vérification indisponible"
+                        : "Gmail et Google Agenda"}
+                    </p>
+                  </div>
+                  {account?.provider === "google" ? (
+                    <button className="secondary" type="button" onClick={disconnect} aria-label="Déconnecter Google">
+                      <LogOut size={15} aria-hidden="true" /> Déconnecter
+                    </button>
+                  ) : (
+                    <button className="primary" type="button" onClick={connectGoogle} disabled={busyMail || !!account}>
+                      Connecter Google
+                    </button>
+                  )}
+                </div>
+                <div className="settings-service">
+                  <div className="settings-service-icon" aria-hidden="true">
+                    <CalendarDays size={19} />
+                  </div>
+                  <div className="settings-service-copy">
+                    <h3>Outlook professionnel</h3>
+                    <p>
+                      {account?.provider === "microsoft" ? account.username
+                        : msal ? "Messagerie et calendrier"
+                        : "Configuration Microsoft requise"}
+                    </p>
+                  </div>
+                  {account?.provider === "microsoft" ? (
+                    <button className="secondary" type="button" onClick={disconnect} aria-label="Déconnecter Outlook">
+                      <LogOut size={15} aria-hidden="true" /> Déconnecter
+                    </button>
+                  ) : msal && (
+                    <button className="secondary" type="button" onClick={connect} disabled={busyMail || !!account}>
+                      Connecter Outlook
+                    </button>
+                  )}
+                </div>
+              </div>
+              {account && <p className="settings-hint">Déconnecte le compte actuel pour changer de messagerie.</p>}
+              <details className="settings-disclosure" data-no-swipe>
+                <summary>Autorisations de messagerie</summary>
+                <div className="settings-disclosure-body">
+                  <p>Google autorise la lecture de Gmail et du calendrier principal. La session dure jusqu’à 30 jours. La déconnexion ferme la session sur cet appareil.</p>
+                  {!msal && <p>Un administrateur doit configurer Outlook dans Microsoft Entra ID et autoriser la lecture des e-mails et du calendrier.</p>}
+                </div>
+              </details>
+            </section>
+          )}
           <WidgetSettings
             shown={nav === "Paramètres"}
             settings={widgetSettings}
@@ -993,120 +1101,17 @@ function App() {
             saveError={widgetSaveError}
             actionsTarget={settingsActionsTarget}
           />
-          {nav === "Paramètres" ? (
-            <>
-              <section className="card settings-card">
-                <div className="card-head">
-                  <div>
-                    <div className="section-kicker">CONNEXION</div>
-                    <h2>Vos comptes</h2>
-                    <p>
-                      Connectez Google ou Outlook pour consulter vos données. Un
-                      seul compte à la fois.
-                    </p>
-                  </div>
-                </div>
-                <div className="settings-row">
-                  <div className="service-icon google-icon">
-                    <Mail size={20} />
-                  </div>
-                  <div className="grow">
-                    <strong>Compte Google</strong>
-                    <p>
-                      {checkingSession
-                        ? "Vérification…"
-                        : sessionUnavailable
-                          ? "Vérification indisponible"
-                          : account?.provider === "google"
-                            ? account.username
-                            : "Non connecté"}
-                    </p>
-                  </div>
-                  {account?.provider === "google" ? (
-                    <button className="secondary" onClick={disconnect}>
-                      <LogOut size={15} /> Déconnecter
-                    </button>
-                  ) : (
-                    <button
-                      className="primary"
-                      onClick={connectGoogle}
-                      disabled={busyMail || !!account}
-                    >
-                      Connecter Google
-                    </button>
-                  )}
-                </div>
-                <div className="notice neutral">
-                  <strong>Gmail et Google Agenda</strong>
-                  <p>
-                    La connexion passe directement par Google. Seule la lecture de
-                    Gmail et des événements de votre agenda principal est demandée. La session reste sur cet appareil
-                    pendant 30 jours au maximum ; une reconnexion peut être
-                    nécessaire. Le bouton Déconnecter ferme la session de cet
-                    appareil, sans retirer l’autorisation dans votre compte Google.
-                  </p>
-                </div>
-                <div className="settings-row">
-                  <div className="service-icon">
-                    <Mail size={20} />
-                  </div>
-                  <div className="grow">
-                    <strong>Outlook professionnel</strong>
-                    <p>
-                      {checkingSession
-                        ? "Vérification…"
-                        : account?.provider === "microsoft"
-                          ? account.username
-                          : "Non connecté"}
-                    </p>
-                  </div>
-                  {account?.provider === "microsoft" ? (
-                    <button className="secondary" onClick={disconnect}>
-                      <LogOut size={15} /> Déconnecter
-                    </button>
-                  ) : (
-                    <button
-                      className="primary"
-                      onClick={connect}
-                      disabled={busyMail || !!account}
-                    >
-                      Connecter Outlook
-                    </button>
-                  )}
-                </div>
-                <div className="notice">
-                  <strong>Configuration nécessaire</strong>
-                  <p>
-                    Un administrateur doit enregistrer l’application dans
-                    Microsoft Entra ID et autoriser la lecture des e-mails et du
-                    calendrier. Consultez le fichier README du projet.
-                  </p>
-                </div>
-                <div className="notice neutral">
-                  <strong>Résumé par IA Gemini</strong>
-                  <p>
-                    À configurer sur Vercel avec une clé côté serveur. Après «
-                    Actualiser » dans E-mails ou en lançant l’analyse
-                    manuellement, les messages concernés sont transmis à Gemini.
-                    Vérifiez l’autorisation de votre organisation et les
-                    conditions de confidentialité avant utilisation.
-                  </p>
-                </div>
-                <div className="notice neutral">
-                  <strong>Stockage des tâches</strong>
-                  <p>
-                    Les tâches et échéances sont enregistrées sur cet appareil
-                    et synchronisées avec Firebase si la synchronisation est
-                    active.
-                  </p>
-                </div>
-              </section>
-              <div
-                ref={setSettingsActionsTarget}
-                className="settings-page-actions"
-              />
-            </>
-          ) : (
+          {nav === "Paramètres" && (
+            <div ref={setSettingsActionsTarget} className="settings-page-actions" />
+          )}
+          <React.Suspense fallback={nav === "Paramètres" ? <Loading label="Chargement de la synchronisation…" /> : null}>
+            <SyncAccount
+              visible={nav === "Paramètres"}
+              onApplied={refreshLocal}
+              onStatusChange={setSyncStatus}
+            />
+          </React.Suspense>
+          {nav !== "Paramètres" && (
             <>
               {nav === "Vue d’ensemble" && (
                 <>
@@ -1717,10 +1722,12 @@ function App() {
               )}
             </>
           )}
-          <footer>
-            <span>Votre espace, en toute simplicité.</span>
-            <span>POSTE DE PILOTAGE · V1</span>
-          </footer>
+          {nav !== "Paramètres" && (
+            <footer>
+              <span>Votre espace, en toute simplicité.</span>
+              <span>POSTE DE PILOTAGE · V1</span>
+            </footer>
+          )}
         </div>
       </main>
       {showForm && (

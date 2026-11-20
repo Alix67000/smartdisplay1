@@ -90,7 +90,9 @@ html,body,#root{width:100%;min-height:100%;background:#07090d}body{padding:env(s
 .dashboard-home .content{height:100dvh;max-width:none;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;grid-template-rows:auto minmax(0,1fr);gap:10px;overflow:hidden}
 .dashboard-home .summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
 .dashboard-home .stat{width:100%;min-height:105px;display:flex;flex-direction:column;justify-content:center;padding:14px;text-align:left;color:inherit;background:linear-gradient(145deg,#171c28,#10141e)}
-.dashboard-home [data-widget-route]{touch-action:pan-y pinch-zoom}
+.app:has(.swipe-panel){overflow-x:clip}
+.swipe-panel{touch-action:pan-y pinch-zoom}
+.swipe-panel[style*="--swipe-offset"]{transform:translateX(var(--swipe-offset))}
 .dashboard-home .stat:focus-visible,.dashboard-home .detail-tile:focus-visible{outline:3px solid #9c8fff;outline-offset:2px}
 .dashboard-home .stat-value{font-size:clamp(25px,8vw,42px)}
 .dashboard-home .home-details-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(190px,1fr);gap:10px;min-height:0}

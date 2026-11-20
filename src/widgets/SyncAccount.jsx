@@ -71,9 +71,59 @@ export default function SyncAccount({visible,onApplied,onStatusChange}){
   catch{setError('Le conflit a changé ou la connexion est indisponible. Actualise et réessaie sans effacer tes données.')}
   finally{setBusy(false)}
  }
- return <div hidden={!visible}><section className="card settings-card"><div className="card-head"><div><div className="section-kicker">SYNCHRONISATION</div><h2>Compte de synchronisation</h2><p>Firebase synchronise les tâches et réglages ; l’accès Gmail et Agenda reste séparé.</p></div></div><div className="settings-row"><div className="grow"><strong>Compte Google</strong><p>{user===undefined?'Vérification de la connexion…':user?user.email:'Non connecté'}</p>{['connecting','working','waiting'].includes(status)?<Loading label={labels[status]}/>:<p role="status">{labels[status]||status}</p>}</div></div>
- {user&&owner&&owner!==user.uid&&<div className="notice" role="alert">Cet appareil contient des données associées à un autre compte. La synchronisation est bloquée pour éviter de mélanger les données. Reconnecte le compte initial.</div>}
- {user&&(!owner||owner===user.uid)&&<div className="notice neutral"><strong>{owner?'Sauvegarde locale':'Avant la première synchronisation'}</strong><p>Le fichier contient tes notes, liens, tâches, échéances et réglages, sans e-mails ni mots de passe. Il n’est pas chiffré : conserve-le dans un endroit sûr.</p><button className="secondary" onClick={exportBackup}>Télécharger une sauvegarde</button>{!owner&&<><p>Après sauvegarde, l’activation ajoute les données locales à ton espace Firebase. Les divergences ne sont pas écrasées automatiquement.</p><button className="primary" disabled={!backup} onClick={activate}>Activer la synchronisation</button></>}</div>}
- {conflicts.length>0&&<div className="notice" role="alert"><strong>{conflicts.length} élément(s) en conflit</strong><p>Télécharge les deux versions, puis choisis celle à conserver pour chaque élément. Le choix de l’une remplacera l’autre après synchronisation.</p><button className="secondary" onClick={exportConflicts}>Sauvegarder les versions en conflit</button>{conflicts.map(c=><div key={c.key} className="sync-conflict"><p><strong>{c.key.split('/')[0]}</strong></p><p>Cet appareil : <code>{JSON.stringify(c.local)}</code></p><p>Firebase : <code>{JSON.stringify(c.remote)}</code></p><button className="secondary" disabled={!conflictBackup||busy} onClick={()=>resolveConflict(c,'local')}>Garder cet appareil</button>{' '}<button className="secondary" disabled={!conflictBackup||busy} onClick={()=>resolveConflict(c,'remote')}>Garder Firebase</button></div>)}</div>}
- {error&&<div className="notice" role="alert">{error}</div>}<div className="widget-settings-note">Firebase reçoit tes données de travail, y compris les tâches ou échéances issues d’analyses d’e-mails. Elles ne sont pas chiffrées de bout en bout. La déconnexion ne supprime pas la copie locale.</div></section></div>
+ return (
+  <section hidden={!visible} className="settings-panel settings-sync" aria-labelledby="settings-sync-title">
+   <h2 id="settings-sync-title">Synchronisation</h2>
+   <div className="settings-sync-state">
+    {user?.email && <p className="settings-sync-identity">{user.email}</p>}
+    {user === undefined ? <Loading label="Vérification de la connexion…" /> :
+     ['connecting', 'working', 'waiting'].includes(status) ? <Loading label={labels[status]} /> :
+      <p role="status">{labels[status] || status}</p>}
+   </div>
+   {user && owner && owner !== user.uid && (
+    <div className="settings-alert" role="alert">Les données de cet appareil sont associées à un autre compte. Reconnecte ce compte pour reprendre la synchronisation.</div>
+   )}
+   {error && <div className="settings-alert" role="alert">{error}</div>}
+   {user && (!owner || owner === user.uid) && (
+    <div className="settings-sync-block">
+     <h3>{owner ? 'Sauvegarde locale' : 'Première synchronisation'}</h3>
+     <p className="settings-hint">
+      {owner ? 'Le fichier JSON contient tes données et réglages. Conserve-le dans un endroit sûr.' :
+       'Télécharge une sauvegarde avant d’envoyer tes données locales vers Firebase.'}
+     </p>
+     <div className="settings-inline-actions">
+      <button type="button" className="secondary" onClick={exportBackup}>Télécharger une sauvegarde</button>
+      {!owner && <button type="button" className="primary" disabled={!backup} onClick={activate}>Activer la synchronisation</button>}
+     </div>
+    </div>
+   )}
+   {conflicts.length > 0 && (
+    <div className="settings-sync-block">
+     <h3>{conflicts.length} {conflicts.length === 1 ? 'élément en conflit' : 'éléments en conflit'}</h3>
+     <p className="settings-hint">Télécharge les deux versions, puis choisis celle qui doit remplacer l’autre pour chaque élément.</p>
+     <div className="settings-inline-actions">
+      <button type="button" className="secondary" onClick={exportConflicts}>Sauvegarder les versions en conflit</button>
+     </div>
+     {conflicts.map(conflict => (
+      <div key={conflict.key} className="settings-sync-conflict">
+       <h4>{conflict.key.split('/')[0]}</h4>
+       <p>Cet appareil <code>{JSON.stringify(conflict.local)}</code></p>
+       <p>Firebase <code>{JSON.stringify(conflict.remote)}</code></p>
+       <div className="settings-inline-actions">
+        <button type="button" className="secondary" disabled={!conflictBackup || busy} onClick={() => resolveConflict(conflict, 'local')}>Garder cet appareil</button>
+        <button type="button" className="secondary" disabled={!conflictBackup || busy} onClick={() => resolveConflict(conflict, 'remote')}>Garder Firebase</button>
+       </div>
+      </div>
+     ))}
+    </div>
+   )}
+   <details className="settings-disclosure" data-no-swipe>
+    <summary>Données et confidentialité</summary>
+    <div className="settings-disclosure-body">
+     <p>Firebase synchronise tes notes, liens, tâches, échéances et réglages, y compris les tâches issues de l’analyse d’e-mails. Ces données sont conservées sur cet appareil après déconnexion.</p>
+     <p>Les e-mails et mots de passe sont exclus de la sauvegarde JSON. La sauvegarde est en clair et la synchronisation est sans chiffrement de bout en bout.</p>
+    </div>
+   </details>
+  </section>
+ );
 }
