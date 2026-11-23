@@ -506,6 +506,10 @@ function App() {
             fournisseur:
               "Le fournisseur a signalé une erreur (code FOURNISSEUR).",
             code: "Code d’autorisation manquant ou invalide (code AUTORISATION).",
+            configuration: "Le service Google a refusé la configuration de connexion de Smart Display (code CONFIGURATION).",
+            autorisation_expiree: "Google a refusé le code d’autorisation (code AUTORISATION EXPIRÉE). Relance la connexion depuis Smart Display.",
+            identite: "Google n’a pas confirmé le compte attendu (code IDENTITÉ). Choisis le même compte Google à chaque étape.",
+            verification: "Smart Display n’a pas pu vérifier la réponse de Google ou enregistrer la connexion (code VÉRIFICATION).",
             echange: "Google n’a pas pu terminer la connexion sécurisée (code ECHANGE).",
             refresh: "Google n’a pas fourni l’autorisation durable nécessaire (code REFRESH).",
           };
