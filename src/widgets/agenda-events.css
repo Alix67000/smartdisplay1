@@ -1,0 +1,125 @@
+.agenda-events {
+  container-type: inline-size;
+}
+
+.agenda-events .card-head {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.agenda-feed {
+  padding-bottom: 14px;
+}
+
+.agenda-day {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.agenda-day h3 {
+  margin: 0;
+  color: #e7ebf3;
+  font-size: .875rem;
+}
+
+.agenda-day h3:first-letter {
+  text-transform: uppercase;
+}
+
+.agenda-entries {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-entry {
+  display: grid;
+  grid-template-areas: "time action" "detail action";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border: 1px solid #293145;
+  border-radius: 9px;
+  background: #101620;
+  overflow-wrap: anywhere;
+}
+
+.agenda-entry-time {
+  grid-area: time;
+  color: #c2b9ff;
+  font-size: .8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-entry-detail {
+  grid-area: detail;
+  display: grid;
+  gap: 5px;
+  color: #e7ebf3;
+  font-size: .875rem;
+}
+
+.agenda-entry-detail span {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: #aeb8ca;
+  font-size: .75rem;
+}
+
+.agenda-entry-detail svg {
+  flex: none;
+}
+
+.agenda-entry .remove {
+  grid-area: action;
+  display: grid;
+  min-width: 44px;
+  min-height: 44px;
+  place-items: center;
+  color: #aeb8ca;
+}
+
+.agenda-status {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid #293145;
+  border-radius: 9px;
+  color: #b6bfce;
+  font-size: .8125rem;
+}
+
+.agenda-status-error {
+  border-color: #603037;
+  background: #321b1e;
+  color: #ffaaa4;
+}
+
+.agenda-overdue {
+  margin-top: 14px;
+  border-top: 1px solid #293145;
+  padding-top: 12px;
+}
+
+.agenda-overdue summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #c2b9ff;
+  font-size: .8125rem;
+}
+
+.agenda-events :is(button, summary):focus-visible {
+  outline: 2px solid #c2b9ff;
+  outline-offset: 2px;
+}
+
+@container (min-width: 32rem) {
+  .agenda-entry {
+    grid-template-areas: "time detail action";
+    grid-template-columns: 10.5rem minmax(0, 1fr) auto;
+  }
+}

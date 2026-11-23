@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, CloudSun, Mail, MapPin } from 'lucide-react';
+import { CheckCircle2, Mail, MapPin } from 'lucide-react';
 import Loading from './Loading.jsx';
 import CitySearch from './CitySearch.jsx';
 import { widgetDefinitions } from './settings.js';
@@ -9,10 +9,10 @@ import './settings-page.css';
 
 const widgetGroups = [
   ['Indicateurs', widgetDefinitions.filter(([key]) => key.startsWith('stat'))],
-  ['Widgets et blocs', widgetDefinitions.filter(([key]) => !key.startsWith('stat'))],
+  ['Widgets et blocs', widgetDefinitions.filter(([key]) => !key.startsWith('stat') && key !== 'weather')],
 ];
 
-export default function WidgetSettings({ settings, city, onSave, shown, saveError, actionsTarget }) {
+export default function WidgetSettings({ settings, city, onSave, shown, saveError, actionsTarget, weatherOnly = false }) {
   const [draft, setDraft] = useState(settings);
   const [draftCity, setDraftCity] = useState(city);
   const [baseline, setBaseline] = useState({ settings, city });
@@ -147,12 +147,12 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
   }
 
   return (
-    <section hidden={!shown} className="settings-panel widget-settings" aria-labelledby="widgets-settings-title">
-      <h2 id="widgets-settings-title">Widgets</h2>
+    <section hidden={!shown} className="settings-panel widget-settings" aria-labelledby={weatherOnly ? "weather-settings-title" : "widgets-settings-title"}>
+      <h2 id={weatherOnly ? "weather-settings-title" : "widgets-settings-title"}>{weatherOnly ? "Réglages météo" : "Widgets"}</h2>
       {saveError && !notice && (
         <p className="settings-alert" role="alert">Le dernier enregistrement a échoué. Vérifie le stockage de cet appareil.</p>
       )}
-      <details className="settings-disclosure" data-no-swipe>
+      {!weatherOnly && <details className="settings-disclosure" data-no-swipe>
         <summary>Visibilité sur le tableau de bord</summary>
         <div className="settings-disclosure-body settings-widget-groups">
           {widgetGroups.map(([group, definitions]) => (
@@ -172,9 +172,9 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
             </fieldset>
           ))}
         </div>
-      </details>
-      <div className="settings-widget-options">
-        <div className="settings-widget-option">
+      </details>}
+      <div className={weatherOnly ? "settings-widget-option" : "settings-widget-options"}>
+        {!weatherOnly && <div className="settings-widget-option">
           <h3 className="settings-option-heading">
             <span className="settings-service-icon" aria-hidden="true"><Mail size={19} /></span>
             E-mails
@@ -189,12 +189,17 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
             </select>
           </label>
           <p className="settings-hint">À la prochaine actualisation, les messages récupérés sont transmis à Gemini pour l’analyse.</p>
-        </div>
-        <div className="settings-widget-option">
-          <h3 className="settings-option-heading">
-            <span className="settings-service-icon" aria-hidden="true"><CloudSun size={19} /></span>
-            Météo
-          </h3>
+        </div>}
+        {weatherOnly && <div className="settings-widget-option">
+          <label className="widget-toggle">
+            <span>Afficher la météo sur le tableau de bord</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={draft.visible.weather}
+              onChange={event => editSettings({ ...draft, visible: { ...draft.visible, weather: event.target.checked } })}
+            />
+          </label>
           <p className="settings-current-city">
             <MapPin size={16} aria-hidden="true" />
             {draftCity ? cityLabel(draftCity) : 'Aucune ville sélectionnée'}
@@ -218,7 +223,7 @@ export default function WidgetSettings({ settings, city, onSave, shown, saveErro
               </select>
             </label>
           </div>
-        </div>
+        </div>}
       </div>
       {dirty && changedElsewhere && (
         <div className="settings-alert settings-draft-conflict" role="alert">

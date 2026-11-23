@@ -61,84 +61,556 @@ html,body,#root{width:100%;min-height:100%;background:#07090d}body{padding:env(s
 .exchange-base,.note-item,.link-item,.month-item{background:#111722;border-color:#293145}.exchange-base-head,.exchange-foot,.month-calendar-head,.month-calendar-foot{border-color:#293145}.exchange-base-head strong,.exchange-line strong,.note-item p,.link-text strong,.month-navigation h3,.month-agenda h3,.month-item strong{color:#eef2f8}.exchange-foot,.exchange-meta,.link-text small{color:#838ea3}.month-calendar-symbol,.exchange-symbol{background:#29254a;color:#b9adff}.month-day{background:#0d121b;color:#aeb7c7}.month-agenda{background:#0d121b;border-color:#293145}.month-arrow,.month-today{background:#151b27;border-color:#30384a;color:#c4cad6}
 .modal,.settings-dialog{background:#111722;color:#f3f6fc}.modal label,.settings-dialog h2{color:#e9edf5}.settings-dialog p{color:#9da7b9}.settings-change-list{background:#0d121b;color:#cbd2df}
 
-/* Widgets are kept compact, with vertical scrolling when they exceed the display. */
-.dashboard-home{display:block}
-.dashboard-home>.sidebar,.dashboard-home .topbar,.dashboard-home .intro,.dashboard-home .error,.dashboard-home .sync-loading-banner{display:none}
-.dashboard-home .main{width:100%;height:100dvh;overflow:auto;overscroll-behavior:contain}
-.dashboard-home .content{min-height:100%;max-width:none;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));display:grid;align-content:start;gap:12px}
-.dashboard-home .summary-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0}
-.dashboard-home .stat{width:100%;min-width:0;min-height:105px;display:flex;flex-direction:column;justify-content:center;padding:14px;text-align:left;color:inherit;background:linear-gradient(145deg,#171c28,#10141e)}
-.app:has(.swipe-panel){overflow-x:clip}
-.swipe-panel{touch-action:pan-y pinch-zoom}
-.swipe-panel[style*="--swipe-offset"]{transform:translateX(var(--swipe-offset))}
-.dashboard-home .stat:focus-visible,.dashboard-home .detail-tile:focus-visible,.weather-open:focus-visible,.detail-back:focus-visible{outline:3px solid #9c8fff;outline-offset:2px}
-.dashboard-home .stat-value{font-size:clamp(25px,4.8vw,42px)}
-.dashboard-home .home-details-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(170px,1fr);gap:10px}
-.dashboard-home .home-details-grid > :only-child{grid-column:1 / -1}
-.dashboard-home .detail-tiles{display:grid;grid-auto-rows:1fr;gap:10px}
-.dashboard-home .detail-tile{min-width:0;margin:0}
-.dashboard-home .weather-card{position:relative;min-height:164px;margin:0;display:flex;flex-direction:column;border-color:#293145;overflow:visible}
-.dashboard-home .weather-head{padding:14px 16px 6px}
-.dashboard-home .weather-content{flex:1;padding:8px 16px 14px;align-content:center}
-.dashboard-home .weather-days{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;min-width:0}
-.dashboard-home .weather-day{min-width:0}
-.dashboard-home .weather-day:nth-child(n+4){display:none}
-.weather-open{position:absolute;inset:0;width:100%;border:0;border-radius:inherit;background:transparent}
-.home-extra-widgets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.home-extra-widgets .detail-tile{min-height:54px;gap:8px;padding:8px 10px;font-size:13px;font-weight:700}
-.home-extra-widgets .detail-tile-icon{width:32px;height:32px}
-.home-empty{padding:16px 0;text-align:center;color:#aeb8ca}
-.desktop-settings-shortcut{display:none}
-
-/* The widget-only dashboard hides the full navigation. Desktop users still
-   need a visible, keyboard-accessible way to reach settings without swiping. */
-@media (min-width:1001px), (hover:hover) and (pointer:fine){
-  .dashboard-home .content{padding-right:max(74px,env(safe-area-inset-right))}
-  .dashboard-home .desktop-settings-shortcut{position:fixed;top:18px;right:18px;z-index:20;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid #364057;border-radius:13px;background:#111722e8;color:#aeb8ca;box-shadow:0 10px 28px #0007;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-  .dashboard-home .desktop-settings-shortcut:hover{background:#1b2331;color:#fff;border-color:#53607a}
-  .dashboard-home .desktop-settings-shortcut:focus-visible{outline:3px solid #9c8fff;outline-offset:3px}
+/* Smart Display */
+.display-shell {
+  --display-bg: #0b0f12;
+  --display-rail: #111316;
+  --display-card: #121a1c;
+  --display-raised: #202a30;
+  --display-border: #222d33;
+  --display-ink: #f0f5f4;
+  --display-muted: #a4afb6;
+  --display-amber: #ffb224;
+  --display-blue: #72bbff;
+  --display-green: #36d398;
+  --display-pad: clamp(12px, 2.5vw, 24px);
+  --display-dock-height: calc(68px + env(safe-area-inset-bottom));
+  color-scheme: dark;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--display-bg);
+  color: var(--display-ink);
 }
+body:has(.display-shell) { padding: 0 }
+.display-shell > .main {
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--display-raised) transparent;
+  background: var(--display-bg);
+}
+.display-shell.dashboard-home > .main { scrollbar-width: none }
+.display-shell.dashboard-home > .main::-webkit-scrollbar { display: none }
+.display-shell .content {
+  max-width: 1300px;
+  padding: max(12px, env(safe-area-inset-top)) max(var(--display-pad), env(safe-area-inset-right))
+    var(--display-pad) max(var(--display-pad), env(safe-area-inset-left));
+}
+.app:has(.swipe-panel) { overflow-x: clip }
+.swipe-panel { touch-action: pan-y pinch-zoom }
+.swipe-panel[style*="--swipe-offset"] { transform: translateX(var(--swipe-offset)) }
+.display-dock {
+  min-width: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  place-items: center;
+  gap: 0;
+  height: var(--display-dock-height);
+  padding: 0 max(8px, env(safe-area-inset-right)) env(safe-area-inset-bottom)
+    max(8px, env(safe-area-inset-left));
+  border-top: 1px solid var(--display-border);
+  background: var(--display-rail);
+}
+.display-tab {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(100% - 4px, 70px);
+  min-height: 52px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--display-muted);
+}
+.display-tab[aria-current="page"], .display-tab:hover {
+  background: var(--display-raised);
+  color: var(--display-ink);
+}
+.display-tab[aria-current="page"] svg { stroke-width: 2.5 }
+@media (min-width: 640px) and (orientation: landscape) {
+  .display-shell.dashboard-section:has(.display-dock) {
+    grid-template-columns: 88px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .dashboard-section:has(.display-dock) > .main { grid-column: 2; grid-row: 1 }
+  .dashboard-section > .display-dock {
+    grid-column: 1;
+    grid-row: 1;
+    height: auto;
+    grid-auto-flow: row;
+    grid-auto-rows: minmax(0, 1fr);
+    padding: max(6px, env(safe-area-inset-top)) 7px max(6px, env(safe-area-inset-bottom));
+    border-top: 0;
+    border-right: 1px solid var(--display-border);
+  }
+  .dashboard-section .display-tab { width: min(100%, 60px); min-height: 44px }
+}
+@media (min-width: 640px) and (orientation: landscape) and (max-height: 410px) {
+  .display-shell.dashboard-section:has(.display-dock) { grid-template-columns: 64px minmax(0, 1fr) }
+  .dashboard-section .display-tab[data-secondary] { display: none }
+}
+.display-shell :is(button, select, summary, a):focus-visible {
+  outline: 2px solid var(--display-blue);
+  outline-offset: 2px;
+}
+.display-page-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--display-border);
+}
+.display-page-heading h1 {
+  min-width: 0;
+  margin: 0;
+  flex: 1;
+  font: 700 clamp(23px, 3.8vw, 34px)/1.15 'DM Sans', system-ui, sans-serif;
+  letter-spacing: -.02em;
+  overflow-wrap: anywhere;
+}
+.display-page-heading h1:focus { outline: none }
+.display-shell .display-page-heading :is(.detail-back, .settings-back) {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  color: var(--display-muted);
+  border: 1px solid var(--display-border);
+  border-radius: 10px;
+  background: var(--display-card);
+}
+.display-shell .card, .display-shell .stat {
+  background: var(--display-card);
+  border-color: var(--display-border);
+  box-shadow: none;
+}
+.display-shell .card h2, .display-shell .stat-value { color: var(--display-ink) }
+.display-shell .primary {
+  background: var(--display-amber);
+  color: #18130b;
+  border-color: var(--display-amber);
+  box-shadow: none;
+}
+.display-shell .primary:not(:disabled):hover { background: #ffc45b }
+.display-shell .secondary {
+  background: var(--display-raised);
+  color: var(--display-ink);
+  border-color: var(--display-border);
+}
+.display-shell .secondary:not(:disabled):hover { background: #2b363c }
+.display-shell .text-link { color: var(--display-blue) }
+.display-shell .section-kicker { color: var(--display-muted) }
+.display-shell :is(.weather-day, .weather-hour, .month-day, .month-arrow, .month-today, .month-agenda,
+  .month-item, .note-item, .link-item, .exchange-base, .exchange-foot, .links-form, .note-compose) {
+  background: var(--display-rail);
+  border-color: var(--display-border);
+}
+.display-shell :is(.weather-hour svg, .month-calendar-symbol, .exchange-symbol) { color: var(--display-blue) }
+.display-shell .month-day.is-selected { color: #081522; background: var(--display-blue); border-color: var(--display-blue) }
+.display-shell .month-day.is-today:not(.is-selected) { border-color: var(--display-blue) }
+.display-shell :is(.timer-alert, .timer-page) { background: var(--display-card) }
+.display-shell .timer-primary { background: var(--display-amber); border-color: var(--display-amber) }
 
+.dashboard-board, .dashboard-actions, .dashboard-grid { gap: 8px }
+.dashboard-board { --dashboard-header-height: 52px; display: grid }
+.dashboard-toolbar {
+  min-height: var(--dashboard-header-height);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--display-border);
+}
+.dashboard-time {
+  color: var(--display-ink);
+  font: 650 clamp(30px, 5vw, 44px)/1 'DM Sans', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.035em;
+}
+.dashboard-date {
+  min-width: 0;
+  text-align: right;
+  color: var(--display-muted);
+  font-size: clamp(15px, 3vw, 24px);
+  font-weight: 500;
+  text-transform: capitalize;
+}
+.dashboard-date span + span { display: none }
+.dashboard-actions { display: flex; align-items: center }
+.dashboard-edit { width: 44px; padding: 0 }
+.dashboard-edit[aria-expanded="true"] { width: auto }
+.dashboard-edit:not([aria-expanded="true"]) span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%) }
+.dashboard-fold { display: none }
+.dashboard-action, .dashboard-editor select {
+  min-height: 44px;
+  border: 1px solid var(--display-border);
+  border-radius: 11px;
+  background: var(--display-card);
+  color: var(--display-ink);
+  font-size: 13px;
+}
+.dashboard-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  font-weight: 700;
+}
+.dashboard-action:hover, .dashboard-action[aria-expanded="true"] { background: var(--display-raised); border-color: var(--display-blue) }
+.dashboard-action.dashboard-edit:not([aria-expanded="true"]) { padding: 0 }
+.dashboard-action svg { flex: none }
+.dashboard-editor {
+  color-scheme: dark;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, auto)) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--display-border);
+  border-radius: 14px;
+  background: var(--display-card);
+}
+.dashboard-editor[hidden] { display: none }
+.dashboard-editor label { display: grid; gap: 6px; min-width: 0; font-size: 12px; color: var(--display-muted) }
+.dashboard-editor select { width: 100%; min-width: 0; padding: 0 8px }
+.dashboard-save-error, .timer-save-error { margin: 0; color: #ffca96; font-size: 13px }
+.dashboard-grid { --dashboard-columns: 2; display: grid; grid-template-columns: repeat(var(--dashboard-columns), minmax(0, 1fr)); grid-auto-rows: 108px }
+.dashboard-tile { min-width: 0; min-height: 0 }
+.dashboard-tile[data-wide] { grid-column-end: span 2 }
+.dashboard-tile[data-tall] { grid-row-end: span 2 }
+
+.dashboard-tile > :is(.card, .stat, .dashboard-picker) {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--display-border);
+  border-radius: 16px;
+  background: var(--display-card);
+  box-shadow: none;
+}
+.dashboard-tile > :is(button, .weather-card):hover { border-color: #596483 }
+.dashboard-tile :is(button, .stat):focus-visible, .dashboard-action:focus-visible,
+.dashboard-editor select:focus-visible, .detail-back:focus-visible,
+.timer-page button:focus-visible, .timer-alert button:focus-visible {
+  outline: 2px solid var(--display-blue);
+  outline-offset: 2px;
+}
+.dashboard-tile > :is(.detail-tile, .stat, .dashboard-picker) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  padding: clamp(9px, 1.25vw, 18px);
+  color: #f5f7fc;
+  text-align: left;
+}
+.dashboard-tile :is(.detail-tile-icon, .stat-icon) {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: clamp(24px, 3vw, 38px);
+  height: clamp(24px, 3vw, 38px);
+  border-radius: 9px;
+}
+.dashboard-tile :is(.detail-tile-icon, .stat-icon) svg { width: 17px; height: 17px }
+.dashboard-tile .stat-top { flex: none; width: 100%; height: auto }
+.dashboard-tile .stat-value,
+.dashboard-tile .dashboard-tile-value,
+.dashboard-tile .clock-tile strong {
+  margin: 0;
+  color: #f8f9ff;
+  font: 650 clamp(20px, 3.5vw, 38px)/1 'DM Sans', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.035em;
+}
+.dashboard-tile .stat-label, .dashboard-tile .dashboard-tile-copy > span,
+.dashboard-tile .exchange-tile strong {
+  margin: 0;
+  color: #edf0fa;
+  font: 700 clamp(11px, 1.15vw, 15px)/1.25 'DM Sans', system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+.dashboard-tile .dashboard-tile-copy { display: grid; gap: 4px }
+.dashboard-tile .stat-sub { display: none; margin: 0; max-width: 100%; color: #a1acc2 }
+.dashboard-tile[data-tall] .stat-sub { display: block; white-space: normal }
+.dashboard-tile .stat-arrow { display: block }
+.dashboard-tile .stat-arrow, .dashboard-tile > .detail-tile > svg {
+  position: absolute;
+  top: 11px;
+  right: 10px;
+  color: #a5afc5;
+}
+.dashboard-tile .detail-tile small { display: none }
+.dashboard-tile .detail-tile em { margin-top: 4px; color: #a9b4cc }
+.dashboard-tile .stat-icon.purple, .dashboard-tile [data-widget-route="briefing"] .detail-tile-icon { background: #302750; color: #c8b9ff }
+.dashboard-tile .stat-icon.blue, .dashboard-tile [data-widget-route="emails"] .detail-tile-icon,
+.dashboard-tile [data-widget-route="agenda"] .detail-tile-icon { background: #1d324d; color: #a6d2ff }
+.dashboard-tile .stat-icon.orange, .dashboard-tile .tone-timer .detail-tile-icon { background: #432c24; color: #ffc299 }
+.dashboard-tile .stat-icon.green, .dashboard-tile [data-widget-route="liens"] .detail-tile-icon,
+.dashboard-tile .exchange-tile .detail-tile-icon { background: #173a38; color: #9de3cd }
+.dashboard-tile .dashboard-picker { justify-content: center; gap: 7px; border-style: dashed; font-size: 13px; font-weight: 700; overflow-wrap: anywhere }
+.dashboard-picker svg { color: var(--display-blue); flex: none }
+.dashboard-picker small { color: #abb5cb; font-size: 11px }
+.dashboard-picker .dashboard-picker-check { position: absolute; top: 10px; right: 10px }
+.dashboard-tile > .dashboard-picker[aria-pressed="true"] { border: 2px solid var(--display-blue); background: var(--display-raised) }
+
+.dashboard-tile .weather-card { display: flex; flex-direction: column; justify-content: space-between }
+.dashboard-tile .weather-head { gap: 5px; padding: 10px 10px 2px; min-width: 0 }
+.dashboard-tile .weather-head > div:first-child { min-width: 0 }
+.dashboard-tile .weather-head h2 { margin: 0 0 4px; font-size: 14px }
+.dashboard-tile .weather-head p { color: #b2bdd3; font-size: 10px; line-height: 1.2; overflow-wrap: anywhere }
+.dashboard-tile .weather-head p svg { flex: none; width: 11px }
+.dashboard-tile .weather-actions { align-items: flex-start; color: #a5afc5 }
+.dashboard-tile .weather-head .section-kicker, .dashboard-tile .weather-description span,
+.dashboard-tile .weather-description small, .dashboard-tile .weather-days { display: none }
+.dashboard-tile .weather-content { gap: 6px; padding: 2px 10px 8px }
+.dashboard-tile .weather-now { min-width: 0; gap: 6px }
+.dashboard-tile .weather-symbol { flex: none; padding: 4px; border-radius: 7px }
+.dashboard-tile .weather-symbol svg { width: 18px; height: 18px }
+.dashboard-tile .weather-temp { font-size: clamp(19px, 2.4vw, 30px); letter-spacing: -.05em; white-space: nowrap }
+.dashboard-tile .weather-description { min-width: 0 }
+.dashboard-tile .weather-description strong, .dashboard-tile :is(.weather-state, .weather-error) { margin: 0; font-size: 10px; line-height: 1.2; overflow-wrap: anywhere }
+.dashboard-tile .weather-error { color: #ffbbab }
+.dashboard-tile[data-tall] .weather-days {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  gap: 4px;
+}
+.dashboard-tile .weather-day { min-width: 0; gap: 3px; padding: 4px 1px; font-size: 9px }
+.dashboard-tile .weather-day strong { font-size: 9px; text-align: center }
+.dashboard-tile .weather-day:nth-child(n+4) { display: none }
+.weather-open { position: absolute; inset: 0; width: 100%; border: 0; border-radius: inherit; background: transparent }
+.home-empty { padding: 32px 10px; text-align: center; color: #bbc5db }
+
+/* Live cards on the first three rows */
+.dashboard-tile > .dashboard-overview {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding: 10px 16px;
+  overflow: hidden;
+  color: var(--display-ink);
+  text-align: left;
+}
+.dashboard-overview-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--display-muted);
+  font-size: clamp(10px, 1.7vw, 14px);
+  font-weight: 650;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.dashboard-tile > .dashboard-briefing {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 12px;
+}
+.dashboard-briefing-symbol {
+  grid-row: span 2;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: #3d2c20;
+  color: #ffa167;
+}
+.dashboard-tile[data-card="briefing"]:not([data-wide]) .dashboard-briefing { grid-template-columns: minmax(0, 1fr) }
+.dashboard-tile[data-card="briefing"]:not([data-wide]) .dashboard-briefing-symbol { display: none }
+.dashboard-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px }
+.dashboard-metric { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 5px; min-width: 0 }
+.dashboard-metric > span:first-child {
+  min-width: 0;
+  color: var(--display-muted);
+  font-size: clamp(10px, 1.55vw, 14px);
+  line-height: 1.1;
+}
+.dashboard-metric strong { color: var(--display-green); font-size: clamp(13px, 2.3vw, 21px); font-variant-numeric: tabular-nums; font-weight: 650 }
+.dashboard-metric + .dashboard-metric strong { color: var(--display-amber) }
+.dashboard-meter { grid-column: span 2; height: 8px; border-radius: 999px; background: var(--display-raised); overflow: hidden }
+.dashboard-meter i { display: block; height: 100%; border-radius: inherit; background: var(--display-green) }
+.dashboard-metric + .dashboard-metric i { background: var(--display-amber) }
+.dashboard-agenda-next {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  border-left: 3px solid var(--display-blue);
+  padding-left: 10px;
+}
+.dashboard-agenda-next strong, .dashboard-month-copy strong { font-size: clamp(13px, 2.5vw, 22px); line-height: 1.15; font-weight: 650 }
+.dashboard-agenda-next :is(strong, small), .dashboard-month-copy :is(strong, small) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
+.dashboard-agenda-next small, .dashboard-month-copy small { color: var(--display-muted); font-size: clamp(11px, 1.95vw, 16px) }
+.dashboard-tile > .dashboard-calendar { grid-template-columns: minmax(0, 1fr) minmax(0, 10rem); align-items: center; gap: 16px }
+.dashboard-month-map {
+  display: grid;
+  grid-template-columns: repeat(49, minmax(0, 1fr));
+  grid-template-rows: repeat(7, minmax(0, 1fr));
+  grid-auto-flow: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dashboard-month-map i {
+  display: block;
+  aspect-ratio: 1;
+  width: min(100%, 10px);
+  border-radius: 2px;
+  background: var(--display-raised);
+}
+.dashboard-month-map i[data-level="1"] { background: #226344 }
+.dashboard-month-map i[data-level="2"] { background: #258a59 }
+.dashboard-month-map i[data-level="3"] { background: var(--display-green) }
+.dashboard-month-map i[data-today] { outline: 1px solid var(--display-green); outline-offset: -1px }
+.dashboard-month-copy { min-width: 0; display: grid; gap: 3px }
+.dashboard-month-copy strong { font-size: clamp(12px, 2.1vw, 18px); white-space: normal }
+.dashboard-tile[data-card="monthlyCalendar"]:not([data-wide]) .dashboard-calendar { grid-template-columns: minmax(0, 1fr) }
+.dashboard-tile[data-card="monthlyCalendar"]:not([data-wide]) .dashboard-month-map { display: none }
+.dashboard-tile[data-card="timer"] > .detail-tile {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: clamp(7px, 2vw, 18px);
+}
+.dashboard-tile[data-card="timer"] .detail-tile-icon {
+  width: clamp(28px, 7vw, 56px);
+  height: clamp(28px, 7vw, 56px);
+  border-radius: 13px;
+}
+.dashboard-tile[data-card="timer"] .detail-tile-icon svg { width: 55%; height: 55% }
+.dashboard-tile[data-card="timer"] .dashboard-tile-value { color: var(--display-amber); font-size: clamp(22px, 5vw, 42px) }
+.dashboard-tile[data-card="timer"] .dashboard-tile-copy > span { color: var(--display-muted) }
+.dashboard-tile .weather-card:has(.weather-now) .weather-head { display: none }
+.dashboard-tile .weather-card:has(.weather-now) .weather-content {
+  position: relative;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 0;
+  --weather-icon-size: clamp(30px, 8vw, 68px);
+  padding: 6px 12px;
+}
+.dashboard-tile .weather-now {
+  display: grid;
+  flex: none;
+  grid-template-columns: var(--weather-icon-size) minmax(0, 1fr);
+  gap: 0 10px;
+}
+.dashboard-tile .weather-now .weather-symbol {
+  width: var(--weather-icon-size);
+  height: var(--weather-icon-size);
+  grid-row: span 2;
+  padding: 0;
+  background: transparent;
+  color: #ffd287;
+}
+.dashboard-tile .weather-now .weather-symbol svg { width: 90%; height: 90%; stroke-width: 1.5 }
+.dashboard-tile .weather-now .weather-temp { font: 650 clamp(25px, 6vw, 48px)/.95 'DM Sans', system-ui, sans-serif }
+.dashboard-tile .weather-now .weather-temp small { font-size: .5em }
+.dashboard-tile .weather-now .weather-description strong { color: var(--display-muted); font-size: clamp(10px, 1.8vw, 16px); font-weight: 550 }
+.dashboard-tile:not([data-tall]) .weather-days {
+  display: flex;
+  gap: 0;
+  padding-left: calc(var(--weather-icon-size, 0px) + 10px);
+}
+.dashboard-tile:not([data-tall]) .weather-day { background: transparent; border: 0; padding: 0; align-items: flex-start }
+.dashboard-tile:not([data-tall]) .weather-day :is(span, svg), .dashboard-tile:not([data-tall]) .weather-day:nth-child(n+2) { display: none }
+.dashboard-tile:not([data-tall]) .weather-day strong { color: var(--display-muted); font-size: clamp(10px, 1.55vw, 15px); font-weight: 500 }
+.dashboard-tile .weather-content:has(.weather-now) .weather-feedback { position: absolute; right: 8px; bottom: 5px }
+.dashboard-tile .weather-card:not(:has(.weather-now)) .weather-head p { font-size: clamp(11px, 1.7vw, 15px) }
+.dashboard-tile .weather-card:not(:has(.weather-now)) .weather-head h2 { font-size: clamp(15px, 2.25vw, 21px) }
+.dashboard-tile[data-card="weather"] { position: relative; --weather-offset: clamp(42px, 10vw, 88px) }
+.dashboard-weather-placeholder {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 11px;
+  transform: translateY(-50%);
+  width: clamp(27px, 6.2vw, 51px);
+  height: clamp(27px, 6.2vw, 51px);
+  pointer-events: none;
+  color: #ffd287;
+  stroke-width: 1.5;
+}
+.dashboard-tile:has(.weather-now) .dashboard-weather-placeholder { display: none }
+.dashboard-tile .weather-card:not(:has(.weather-now)) { justify-content: center }
+.dashboard-tile .weather-card:not(:has(.weather-now)) .weather-head { padding: 6px 10px 4px var(--weather-offset) }
+.dashboard-tile .weather-card:not(:has(.weather-now)) .weather-content { padding: 0 10px 0 var(--weather-offset) }
+.dashboard-tile[data-card="weather"]:not([data-wide]) { --weather-offset: 10px }
+.dashboard-tile[data-card="weather"]:not([data-wide]) .dashboard-weather-placeholder { display: none }
+
+@media (min-width: 640px) and (orientation: landscape) {
+  .dashboard-grid {
+    --dashboard-columns: 5;
+    --overview-row: clamp(76px, calc((100dvh - var(--display-dock-height) - max(12px, env(safe-area-inset-top)) - var(--display-pad) - var(--dashboard-header-height) - 24px) / 3), 140px);
+    grid-auto-rows: var(--overview-row);
+  }
+  .dashboard-tile[data-wide] { grid-column-end: span var(--tile-span) }
+  .dashboard-fold { display: block; grid-column: 1 / -1; height: 4px; align-self: start }
+  .dashboard-grid:has(.dashboard-fold) { grid-template-rows: repeat(3, var(--overview-row)) 4px }
+}
+@media (orientation: landscape) and (max-height: 410px) {
+  .display-shell { --display-dock-height: calc(56px + env(safe-area-inset-bottom)) }
+  .display-tab { min-height: 44px }
+  .dashboard-board { --dashboard-header-height: 44px }
+  .dashboard-time { font-size: 33px }
+  .dashboard-date { font-size: clamp(16px, 3vw, 22px) }
+  .dashboard-tile > .dashboard-overview { gap: 4px; padding: 6px 14px }
+  .dashboard-briefing-symbol { width: 32px; height: 32px }
+  .dashboard-overview-title { font-size: 11px; line-height: 1.15 }
+  .dashboard-metric strong { font-size: 16px }
+  .dashboard-meter { height: 6px }
+  .dashboard-agenda-next strong { font-size: clamp(14px, 2.2vw, 18px) }
+  .dashboard-agenda-next small, .dashboard-month-copy small { font-size: 12px }
+  .dashboard-month-map i { width: min(100%, 7px); justify-self: center }
+  .dashboard-tile[data-card="timer"] .detail-tile-icon { width: 42px; height: 42px }
+  .dashboard-tile[data-card="timer"] .dashboard-tile-value { font-size: 34px }
+  .dashboard-tile .weather-card:has(.weather-now) .weather-content { --weather-icon-size: 44px }
+  .dashboard-tile .weather-now .weather-temp { font-size: 34px }
+  .dashboard-tile .weather-now .weather-description strong { font-size: 13px }
+  .dashboard-tile:not([data-tall]) .weather-day strong { font-size: 11px }
+}
+@media (max-width: 680px) {
+  .dashboard-editor { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .dashboard-reset { grid-column: 1 / -1; justify-self: start }
+}
+@media (orientation: portrait), (max-width: 639px) {
+  .dashboard-month-map { grid-template-columns: repeat(14, minmax(0, 1fr)) }
+  .dashboard-month-map i:nth-last-child(n + 99) { display: none }
+}
+@media (max-width: 470px) {
+  .display-shell { --display-dock-height: calc(58px + env(safe-area-inset-bottom)) }
+  .display-tab { min-height: 44px }
+  .display-tab[data-secondary] { display: none }
+  .dashboard-date span:first-child { display: none }
+  .dashboard-date span + span { display: inline }
+  .dashboard-toolbar { gap: 6px }
+  .dashboard-briefing-symbol { width: 32px; height: 32px }
+  .dashboard-tile > .dashboard-calendar { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) }
+  .display-page-heading .primary { white-space: normal; max-width: 45%; min-height: 44px }
+}
 .modal-overlay{z-index:50}
-
-@media (orientation:landscape) and (max-height:550px){
-  .dashboard-home .content{gap:9px}
-  .dashboard-home .summary-grid,.dashboard-home .detail-tiles,.home-extra-widgets{gap:8px}
-  .dashboard-home .stat{min-height:86px;padding:8px 10px}
-  .dashboard-home .stat-value{font-size:clamp(20px,4vw,32px);margin-top:5px}
-  .dashboard-home .weather-card{min-height:138px}
-  .dashboard-home .weather-head{padding:8px 11px 3px}
-  .dashboard-home .weather-head h2{font-size:14px;margin:3px 0}
-  .dashboard-home .weather-content{padding:5px 10px 8px;gap:6px}
-  .dashboard-home .weather-now{min-width:145px;gap:6px}
-  .dashboard-home .weather-symbol{padding:5px}
-  .dashboard-home .weather-symbol svg{width:24px;height:24px}
-  .dashboard-home .weather-temp{font-size:23px}
-  .dashboard-home .weather-description strong{font-size:10px}
-  .dashboard-home .weather-description span,.dashboard-home .weather-description small{font-size:8px}
-  .dashboard-home .weather-days{flex:1 1 185px;gap:4px}
-  .dashboard-home .weather-day{padding:5px 3px;gap:3px;font-size:8px}
-  .dashboard-home .weather-day strong{font-size:9px}
-  .dashboard-home .detail-tiles .detail-tile{gap:8px;padding:7px 9px}
-  .dashboard-home .detail-tiles .detail-tile-icon{width:30px;height:30px}
-  .dashboard-home .detail-tiles .detail-tile small{font-size:8px;letter-spacing:.5px}
-  .dashboard-home .detail-tiles .detail-tile strong{font-size:15px}
-  .home-extra-widgets .detail-tile{min-height:44px}
-}
-
-@media (max-width:600px) and (orientation:portrait){
-  .dashboard-home .summary-grid,.home-extra-widgets{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .dashboard-home .stat{min-height:96px;padding:12px}
-  .dashboard-home .stat-icon{width:32px;height:32px}
-  .dashboard-home .stat-value{margin-top:8px}
-  .dashboard-home .home-details-grid{grid-template-columns:1fr}
-  .dashboard-home .detail-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .dashboard-home .detail-tiles > :only-child{grid-column:1 / -1}
-  .dashboard-home .weather-now{min-width:100%}
-  .dashboard-home .weather-content{gap:10px}
-  .dashboard-home .weather-head h2{font-size:15px}
-  .dashboard-section .sidebar{width:50px;padding:12px 6px}.dashboard-section .topbar{height:52px;padding:0 11px}.dashboard-section .status{display:none}.dashboard-section .content{padding:16px 11px}.dashboard-section .summary-grid{grid-template-columns:1fr 1fr}.dashboard-section .card-head{padding:17px 15px}.dashboard-section .list,.dashboard-section .event-list,.dashboard-section .task-list{padding-left:15px;padding-right:15px}
-}
 
 .detail-back{display:inline-flex;align-items:center;gap:7px;margin:0 0 14px;padding:8px 11px;border:1px solid #30394b;border-radius:9px;background:#111722;color:#cbd2df;font-weight:700}
 .detail-tile{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:15px;border:1px solid #293145;background:linear-gradient(145deg,#171c28,#10141e);color:#eef2f8;text-align:left}
@@ -146,3 +618,82 @@ html,body,#root{width:100%;min-height:100%;background:#07090d}body{padding:env(s
 .clock-page{min-height:430px;display:flex;align-items:center;justify-content:center;gap:clamp(32px,8vw,100px);padding:42px}.clock-face{position:relative;width:min(42vw,300px);aspect-ratio:1;border:8px solid #252d3d;border-radius:50%;background:radial-gradient(circle,#171e2a,#090d14);box-shadow:inset 0 0 0 2px #39445b,0 24px 60px #0007}.clock-face:before{content:"";position:absolute;inset:12px;border-radius:50%;background:repeating-conic-gradient(from -1deg,#94a0b5 0 2deg,transparent 2deg 30deg);mask:radial-gradient(circle,transparent 0 91%,#000 92%)}.clock-face b{position:absolute;left:50%;top:50%;width:14px;height:14px;border-radius:50%;background:#f1f4f8;transform:translate(-50%,-50%);z-index:3}.clock-hand{position:absolute;left:calc(50% - 2px);bottom:50%;width:4px;border-radius:5px;transform-origin:50% 100%;background:#eef2f8}.clock-hand.hour{height:26%}.clock-hand.minute{height:36%}.clock-hand.second{left:calc(50% - 1px);width:2px;height:39%;background:#ef6a72}.clock-copy{text-align:center}.clock-digital{font:800 clamp(46px,9vw,86px) Manrope,sans-serif;letter-spacing:-4px;color:#f7f9fc;font-variant-numeric:tabular-nums}.clock-copy p{font-size:17px;text-transform:capitalize;color:#b6c0d0}.clock-copy small{color:#7f8ba0}
 @media(max-width:600px){.clock-page{min-height:0;flex-direction:column;padding:24px 16px}.clock-face{width:min(72vw,260px)}.clock-digital{letter-spacing:-2px}}
 @media(prefers-reduced-motion:reduce){.clock-hand.second{display:none}}
+
+/* Minuteur */
+.timer-page {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  padding: clamp(18px, 4vw, 42px);
+  text-align: center;
+  background: radial-gradient(ellipse at 50% 0, #302139 0, #141a29 48%, #111722 85%);
+}
+.timer-readout { display: grid; justify-items: center; gap: 8px }
+.timer-symbol {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  background: #493126;
+  color: #ffd1ae;
+}
+.timer-digits {
+  color: #fbf6ff;
+  font: 800 clamp(42px, 11vw, 112px)/1 Manrope, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+}
+.timer-status { margin: 0; color: #c2c8d8; font-size: 14px }
+.timer-presets { min-width: 0; margin: 0; padding: 0; border: 0 }
+.timer-presets legend { margin: 0 auto 8px; padding: 0; color: #c2c8d8; font-size: 13px }
+.timer-presets > div, .timer-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px }
+.timer-presets button, .timer-controls button, .timer-primary {
+  min-height: 44px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: normal;
+}
+.timer-presets button { min-width: 57px; border: 1px solid #394254; background: #171e2a; color: #e3e7f1 }
+.timer-presets button:not(:disabled):hover { background: #2c2731 }
+.timer-presets button[aria-pressed="true"] { background: #422f2a; border-color: #d99670; color: #ffdec8 }
+.timer-controls button:disabled, .timer-presets button:disabled { cursor: default }
+.timer-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border: 1px solid #ffb98e;
+  background: #ffc5a2;
+  color: #291b25;
+}
+.timer-primary:not(:disabled):hover { background: #ffdbc5 }
+.timer-alert {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  border: 0;
+  overflow: auto;
+  background: radial-gradient(ellipse at 50% 42%, #3c2430 0, #191522 53%, #0a0b13 100%);
+  color: #fff3ec;
+  text-align: center;
+}
+.timer-alert[open] { display: grid; place-items: center }
+.timer-alert::backdrop { background: #090b12 }
+.timer-alert > div { display: grid; justify-items: center; gap: clamp(16px, 4vh, 32px) }
+.timer-alert .timer-symbol { width: 66px; height: 66px; border-radius: 22px }
+.timer-alert h2 { margin: 0; font: 800 clamp(31px, 7vw, 72px)/1.12 Manrope, system-ui, sans-serif }
+
+@media (orientation: landscape) and (max-height: 550px) {
+  .timer-page { gap: 12px; padding: 14px }
+  .timer-readout .timer-symbol { display: none }
+  .timer-digits { font-size: clamp(42px, 13vh, 72px) }
+}

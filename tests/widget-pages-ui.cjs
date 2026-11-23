@@ -59,6 +59,11 @@ async function run() {
       status: url === '/api/google?action=session' ? 401 : 503,
       json: async () => ({ error: 'Service indisponible' }),
     });
+    window.HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute('open', '');
+      this.querySelector('button').focus();
+    };
+    window.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
     setup(window);
     window.eval(bundle.outputFiles[0].text);
     return dom;
@@ -69,7 +74,7 @@ async function run() {
     ['statAgenda', 'agenda', 'Mon agenda', '.event-list'],
     ['statTasks', 'taches', 'Mes tâches', '.task-list'],
     ['statLate', 'echeances', 'Mes échéances', '.task-list'],
-    ['weather', 'meteo', 'Météo', '.weather-card .weather-search'],
+    ['weather', 'meteo', 'Météo', '#weather-settings-title'],
     ['exchangeRates', 'devises', 'Devises', '.exchange-card'],
     ['clock', 'horloge', 'Horloge', '.clock-page'],
     ['monthlyCalendar', 'calendrier', 'Calendrier mensuel', '.month-calendar'],
@@ -79,6 +84,7 @@ async function run() {
     ['emails', 'emails', 'Mes e-mails', '.list'],
     ['agenda', 'agenda', 'Mon agenda', '.event-list'],
     ['tasks', 'taches', 'Mes tâches', '.task-list'],
+    ['timer', 'minuteur', 'Minuteur', '.timer-page'],
   ];
   const dom = openPage('#/');
   const { window } = dom;
@@ -89,9 +95,9 @@ async function run() {
     'Page attendue : ' + route,
   );
   try {
-    await at('', '.home-extra-widgets');
+    await at('', '.dashboard-grid');
     const inDashboard = () => document.querySelector('main');
-    assert.equal(inDashboard().querySelectorAll('[data-widget-id]').length, 14);
+    assert.equal(inDashboard().querySelectorAll('[data-widget-id]').length, destinations.length);
     for (const [, , , selector] of destinations) assert(!inDashboard().querySelector(selector), selector);
     for (const [id, route, title, selector] of destinations) {
       assert(tile(id), 'Tuile manquante : ' + id);
@@ -100,7 +106,7 @@ async function run() {
       assert.equal(document.querySelector('h1').textContent.trim(), title);
       assert(document.activeElement === document.querySelector('h1'), 'Focus sur le titre ' + title);
       document.querySelector('.detail-back').click();
-      await at('', '.home-extra-widgets');
+      await at('', '.dashboard-grid');
       assert(document.activeElement === tile(id), 'Focus sur la tuile ' + id);
     }
 
@@ -113,12 +119,12 @@ async function run() {
     history.forward();
     await at('agenda', '.event-list');
     document.querySelector('.detail-back').click();
-    await at('', '.home-extra-widgets');
+    await at('', '.dashboard-grid');
     assert(document.activeElement === tile('monthlyCalendar'), 'Focus sur le calendrier');
     history.forward();
     await at('calendrier', '.month-calendar');
     history.back();
-    await at('', '.home-extra-widgets');
+    await at('', '.dashboard-grid');
     assert(document.activeElement === tile('monthlyCalendar'), 'Focus sur le calendrier');
 
     const swipeStart = { identifier: 1, clientX: 250, clientY: 80 };
@@ -133,7 +139,93 @@ async function run() {
     await at('parametres', '.settings-page');
     assert.equal(panel.style.getPropertyValue('--swipe-offset'), '');
     document.querySelector('.settings-back').click();
-    await at('', '.home-extra-widgets');
+    await at('', '.dashboard-grid');
+
+    const edit = document.querySelector('.dashboard-edit');
+    edit.click();
+    await until(() => document.querySelector('.dashboard-picker'), 'Mode édition');
+    const [picker, position, width, height] = document.querySelectorAll('.dashboard-editor select');
+    assert.equal(document.activeElement, picker);
+    const pick = [...document.querySelectorAll('.dashboard-picker')].find(button => button.textContent.includes('Minuteur'));
+    pick.click();
+    await until(() => picker.value === 'timer', 'Sélection tactile du minuteur');
+    assert.equal(document.activeElement, position);
+    const select = (control, value) => {
+      control.value = value;
+      control.dispatchEvent(new window.Event('change', { bubbles: true }));
+    };
+    select(position, '0');
+    await until(() => position.value === '0', 'Déplacement en tête');
+    select(width, '2');
+    await until(() => document.querySelector('.dashboard-tile').hasAttribute('data-wide'), 'Deux colonnes');
+    select(height, '2');
+    await until(() => document.querySelector('.dashboard-tile').hasAttribute('data-tall'), 'Deux lignes');
+    pick.dispatchEvent(new window.TouchEvent('touchstart', { bubbles: true, touches: [swipeStart] }));
+    pick.dispatchEvent(new window.TouchEvent('touchmove', { bubbles: true, touches: [swipeEnd] }));
+    pick.dispatchEvent(new window.TouchEvent('touchend', { bubbles: true, changedTouches: [swipeEnd] }));
+    assert.equal(panel.style.getPropertyValue('--swipe-offset'), '');
+    assert.equal(window.location.hash, '#/');
+
+    height.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await until(() => tile('timer'), 'Sortie du mode édition au clavier');
+    assert.equal(document.activeElement, edit);
+    assert.equal(document.querySelector('.dashboard-tile button'), tile('timer'));
+    const layoutKey = 'pilotage.dashboard.layout.v1';
+    const savedLayout = window.localStorage.getItem(layoutKey);
+    const reopened = openPage('#/', w => w.localStorage.setItem(layoutKey, savedLayout));
+    try {
+      await until(() => reopened.window.document.querySelector('.dashboard-tile'), 'Disposition rechargée');
+      assert.equal(reopened.window.document.querySelector('.dashboard-tile[data-wide][data-tall] button').dataset.widgetId, 'timer');
+    } finally {
+      reopened.window.close();
+    }
+    edit.click();
+    await until(() => document.querySelector('.dashboard-reset'), 'Commande de retour au défaut');
+    document.querySelector('.dashboard-reset').click();
+    await until(() => !document.querySelector('.dashboard-tile[data-tall]'), 'Taille par défaut');
+    const resetLayout = JSON.parse(window.localStorage.getItem(layoutKey));
+    assert.deepEqual(resetLayout.order.slice(0, 5), ['briefing', 'weather', 'agenda', 'timer', 'monthlyCalendar']);
+    assert.deepEqual(resetLayout.sizes.monthlyCalendar, { width: 5, height: 1 });
+    edit.click();
+    await until(() => tile('timer'), 'Grille par défaut');
+    assert.equal(document.querySelector('.dashboard-tile button'), tile('briefing'));
+    document.querySelector('.desktop-settings-shortcut').click();
+    await at('parametres', '.settings-display-card');
+    document.querySelector('.settings-display-card button').click();
+    await at('', '.dashboard-editor:not([hidden])');
+    assert.equal(document.activeElement, document.querySelector('.dashboard-editor select'));
+    document.querySelector('.dashboard-edit').click();
+    await until(() => tile('timer'), 'Retour depuis la grille des Paramètres');
+
+    tile('timer').click();
+    await at('minuteur', '.timer-page');
+    const button = text => [...document.querySelectorAll('button')].find(item => item.textContent.trim() === text);
+    let now = Date.now();
+    window.Date.now = () => now;
+    button('1 min').click();
+    await until(() => document.querySelector('.timer-digits').textContent === '01:00', 'Préréglage d’une minute');
+    button('Démarrer').click();
+    await until(() => button('Mettre en pause'), 'Démarrage');
+    now += 18_000;
+    button('Mettre en pause').click();
+    await until(() => document.querySelector('.timer-digits').textContent === '00:42', 'Temps figé en pause');
+    now += 90_000;
+    button('Reprendre').click();
+    await until(() => button('Mettre en pause'), 'Reprise');
+    button('Remettre à zéro').click();
+    await until(() => button('Démarrer'), 'Remise à zéro');
+    assert.equal(document.querySelector('.timer-digits').textContent, '01:00');
+    button('Démarrer').click();
+    await until(() => button('Mettre en pause'), 'Second départ');
+    document.querySelector('.detail-back').click();
+    await at('', '.dashboard-grid');
+    now += 60_000;
+    document.dispatchEvent(new window.Event('visibilitychange'));
+    await until(() => document.querySelector('.timer-alert[open]'), 'Alerte globale à échéance');
+    assert.equal(document.activeElement.textContent.trim(), 'Fermer l’alerte');
+    button('Fermer l’alerte').click();
+    await until(() => !document.querySelector('.timer-alert'), 'Alerte acquittée');
+    assert.equal(JSON.parse(window.localStorage.getItem('pilotage.timer.v1')).status, 'idle');
 
     tile('emails').click();
     await at('emails', '.demo-banner');
@@ -170,7 +262,7 @@ async function run() {
           'Le retour OAuth en échec doit être visible sur le briefing');
       }
       window.document.querySelector('.detail-back').click();
-      await until(() => window.document.querySelector('.home-extra-widgets'), 'Retour depuis un lien direct');
+      await until(() => window.document.querySelector('.dashboard-grid'), 'Retour depuis un lien direct');
       assert.equal(window.location.hash, '#/');
       assert.equal(window.document.querySelector('[data-widget-id="notes"]'), null);
       assert.equal(window.document.querySelector('[data-widget-id="statEmails"]'), null);
@@ -181,7 +273,15 @@ async function run() {
     }
   }
 
-  console.log('Navigation des 14 tuiles, focus, historique, swipe, liens directs et échecs Google OK');
+  const expired = openPage('#/notes', w => w.localStorage.setItem('pilotage.timer.v1', JSON.stringify({
+    minutes: 5, status: 'running', endsAt: Date.now() - 1_000,
+  })));
+  try {
+    await until(() => expired.window.document.querySelector('.timer-alert[open]'), 'Alerte après réouverture');
+  } finally {
+    expired.window.close();
+  }
+  console.log('15 tuiles, navigation, focus, historique, swipe, édition persistante et minuteur OK');
 }
 
 run().catch(error => {

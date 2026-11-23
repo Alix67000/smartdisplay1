@@ -8,18 +8,17 @@ import React, {
 import { createRoot } from "react-dom/client";
 import { PublicClientApplication } from "@azure/msal-browser";
 import {
-  LayoutDashboard,
+  House,
+  Pencil,
   Mail,
   CalendarDays,
   CheckSquare,
   Clock3,
   Settings,
   Search,
-  Bell,
   Plus,
   ArrowUpRight,
   ArrowLeft,
-  ChevronRight,
   Sparkles,
   X,
   Check,
@@ -29,10 +28,14 @@ import {
   Inbox,
   Link2,
   StickyNote,
+  CloudSun,
+  ArrowDownUp,
+  Timer as TimerIcon,
 } from "lucide-react";
 import "./style.css";
 import { importedItems, mergeById } from "./lib/automation.js";
 import Weather from "./widgets/Weather.jsx";
+import AgendaEvents from "./widgets/AgendaEvents.jsx";
 import MonthlyCalendar from "./widgets/MonthlyCalendar.jsx";
 import ExchangeRates from "./widgets/ExchangeRates.jsx";
 import Clock from "./widgets/Clock.jsx";
@@ -40,6 +43,15 @@ import QuickNotes from "./widgets/QuickNotes.jsx";
 import UsefulLinks from "./widgets/UsefulLinks.jsx";
 import WidgetSettings from "./widgets/WidgetSettings.jsx";
 import Loading from "./widgets/Loading.jsx";
+import DashboardGrid, {
+  DashboardAgenda,
+  DashboardBriefing,
+  DashboardCalendar,
+  DashboardTile,
+  useDashboardMinute,
+} from "./widgets/DashboardGrid.jsx";
+import { agendaDays, calendarItems } from "./widgets/calendar.js";
+import TimerPage, { TimerAlert, TimerTile, useTimer } from "./widgets/Timer.jsx";
 import { connectFirebase, firebaseAuth } from "./lib/firebase-client.js";
 const SyncAccount = React.lazy(() => import("./widgets/SyncAccount.jsx"));
 import {
@@ -81,7 +93,6 @@ const msal = clientId
       cache: { cacheLocation: "sessionStorage" },
     })
   : null;
-const day = new Date();
 const dashboard = "Vue d’ensemble";
 const routes = {
   [dashboard]: "",
@@ -97,18 +108,27 @@ const routes = {
   "Notes rapides": "notes",
   "Liens utiles": "liens",
   "Briefing intelligent": "briefing",
+  Minuteur: "minuteur",
 };
 const routeNames = new Map(Object.entries(routes).map(([name, route]) => [route, name]));
 const googleReturnKey = "pilotage.google.return.v1";
 const googleReturnRoutes = ["emails", "agenda", "briefing", "parametres"];
 const extraWidgets = [
-  ["monthlyCalendar", "Calendrier mensuel", CalendarDays],
   ["notes", "Notes rapides", StickyNote],
   ["usefulLinks", "Liens utiles", Link2],
-  ["briefing", "Briefing intelligent", Sparkles],
   ["emails", "E-mails", Mail, "E-mails récents"],
-  ["agenda", "Agenda", CalendarDays, "Mon agenda"],
   ["tasks", "Tâches", CheckSquare, "Mes tâches"],
+];
+const dockItems = [
+  [dashboard, House],
+  ["E-mails", Mail],
+  ["Briefing intelligent", Sparkles, true],
+  ["Agenda", CalendarDays],
+  ["Météo", CloudSun],
+  ["Tâches", CheckSquare, true],
+  ["Liens utiles", Link2, true],
+  ["Minuteur", TimerIcon],
+  ["Paramètres", Settings],
 ];
 function readNavigation() {
   const { hash, search } = window.location;
@@ -149,7 +169,6 @@ const prettyDue = (value) => {
   if (value === addDays(1)) return "Demain";
   return fmt(value + "T12:00:00", { day: "numeric", month: "short" });
 };
-const time = (value) => fmt(value, { hour: "2-digit", minute: "2-digit" });
 const displaySender = (v) =>
   (v || "Expéditeur inconnu")
     .replace(/\s*<[^>]+>\s*$/, "")
@@ -206,6 +225,8 @@ function App() {
     [widgetSaveError, setWidgetSaveError] = useState(false),
     [syncStatus, setSyncStatus] = useState("idle");
   const [settingsActionsTarget, setSettingsActionsTarget] = useState(null);
+  const [editingDashboard, setEditingDashboard] = useState(false);
+  const timerControls = useTimer();
   const pageHeading = useRef(null);
   const settingsShortcut = useRef(null);
   const swipePanel = useRef(null);
@@ -291,16 +312,6 @@ function App() {
       };
     }
   }
-  function changeWeatherCity(city) {
-    setWeatherCity(city);
-    try {
-      localStorage.setItem(WEATHER_CITY_KEY, JSON.stringify(city));
-      setWidgetSaveError(false);
-      localChanged();
-    } catch {
-      setWidgetSaveError(true);
-    }
-  }
   const visible = widgetSettings.visible;
   const [googleToken, setGoogleToken] = useState(null);
   const [localDeadlines, setLocalDeadlines] = useState(() =>
@@ -336,17 +347,20 @@ function App() {
     [checkingSession, setCheckingSession] = useState(true),
     [sessionUnavailable, setSessionUnavailable] = useState(false),
     [mailError, setMailError] = useState(false),
+    [agendaError, setAgendaError] = useState(false),
     [error, setError] = useState(""),
     [search, setSearch] = useState("");
   const { name: nav, entry } = navigation;
+  const homeNow = useDashboardMinute(nav === dashboard);
   const previousNavigation = useRef(navigation);
   useEffect(() => {
     const previous = previousNavigation.current;
     if (nav !== dashboard) {
+      setEditingDashboard(false);
       if (swipePanel.current) swipePanel.current.scrollTop = 0;
       if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
       pageHeading.current?.focus({ preventScroll: true });
-    } else if (previous.name !== dashboard) {
+    } else if (previous.name !== dashboard && !editingDashboard) {
       const widgets = [...(swipePanel.current?.querySelectorAll("[data-widget-route]") || [])];
       const shortcut = previous.entry?.widget === "settingsShortcut" ? settingsShortcut.current : null;
       const target = (shortcut?.getClientRects().length && shortcut)
@@ -461,17 +475,22 @@ function App() {
         try {
           const r = await requestWithTimeout("/api/google?action=session");
           if (r.ok) {
+            if (r.headers?.get("content-type")?.includes("text/html")) {
+              throw Error("session-api-missing");
+            }
             setGoogleToken("google");
             await googleSync(false);
             return;
           }
           if (r.status !== 401) throw Error("session-unavailable");
-        } catch {
+        } catch (error) {
           sessionFailed = true;
           if (active) {
             setSessionUnavailable(true);
             setError(
-              "Impossible de vérifier la connexion Gmail. Vérifie ta connexion Internet puis actualise la page.",
+              error?.message === "session-api-missing"
+                ? "Le service de connexion Google n’est pas disponible sur cette adresse."
+                : "Impossible de vérifier la connexion Gmail. Vérifie ta connexion Internet puis actualise la page.",
             );
           }
         }
@@ -586,37 +605,43 @@ function App() {
     setError("");
     setMailError(false);
     let expired = false;
+    setAgendaError(false);
     const hours = settingsRef.current.emailHours,
       generation = sessionGeneration.current;
     try {
-      const [sr, mr, er] = await Promise.all([
+      const [session, mail, agenda] = await Promise.allSettled([
         requestWithTimeout("/api/google?action=session"),
         requestWithTimeout("/api/google?action=messages&hours=" + hours),
         requestWithTimeout("/api/google?action=events"),
       ]);
-      if (!sr.ok || !mr.ok || !er.ok) {
-        if (sr.status === 401 || mr.status === 401 || er.status === 401) {
-          expired = true;
-          setGoogleToken(null);
-          setAccount(null);
-          setMessages([]);
-          setEvents([]);
-          setMoreMessages(false);
-          throw new Error("La connexion Google a expiré. Reconnecte ton compte.");
-        }
-        throw new Error(
-          "Impossible de charger Gmail ou Google Agenda. Réessaie.",
-        );
-      }
-      const profile = await sr.json(),
-        data = await mr.json(),
-        calendar = await er.json();
       if (generation !== sessionGeneration.current) return;
-      const fetched = Array.isArray(data.messages) ? data.messages : [];
-      setMessages(fetched);
-      setLoadedHours(hours);
-      setMoreMessages(!!data.more);
-      setEvents(Array.isArray(calendar.events) ? calendar.events : []);
+      const response = (result) => result.status === "fulfilled" ? result.value : null;
+      const sr = response(session), mr = response(mail), er = response(agenda);
+      if ([sr, mr, er].some(result => result?.status === 401)) {
+        expired = true;
+        setGoogleToken(null);
+        setAccount(null);
+        setMessages([]);
+        setEvents([]);
+        setMoreMessages(false);
+        throw new Error("La connexion Google a expiré. Reconnecte ton compte.");
+      }
+      if (!sr?.ok) throw new Error("Impossible de vérifier la connexion Google. Réessaie.");
+      const read = (result) => result?.ok ? result.json().catch(() => null) : null;
+      const [profile, data, calendar] = await Promise.all([read(sr), read(mr), read(er)]);
+      if (generation !== sessionGeneration.current) return;
+      if (typeof profile?.email !== "string") {
+        throw new Error("La réponse du service de connexion Google est illisible. Réessaie.");
+      }
+      const fetched = Array.isArray(data?.messages) ? data.messages : null;
+      setMailError(!fetched);
+      setAgendaError(!Array.isArray(calendar?.events));
+      if (fetched) {
+        setMessages(fetched);
+        setLoadedHours(hours);
+        setMoreMessages(!!data.more);
+      }
+      if (Array.isArray(calendar?.events)) setEvents(calendar.events);
       setAccount({
         provider: "google",
         via: "google",
@@ -625,7 +650,7 @@ function App() {
       });
       setSessionUnavailable(false);
       setLoading(false);
-      if (autoAnalyze) await analyzeWeek(fetched, hours, generation);
+      if (autoAnalyze && fetched) await analyzeWeek(fetched, hours, generation);
     } catch (e) {
       if (generation === sessionGeneration.current) {
         setMailError(true);
@@ -676,7 +701,7 @@ function App() {
 
   function onTouchStart(event) {
     resetSwipe();
-    if (showForm || event.currentTarget.querySelector('[aria-modal="true"]')) return;
+    if (editingDashboard || showForm || event.currentTarget.querySelector('[aria-modal="true"]')) return;
     if (nav !== dashboard && nav !== "Paramètres") return;
     if (event.touches.length !== 1) return;
     const control = event.target.closest?.("button,a,input,select,textarea,label,[role=button],[role=link],[contenteditable],[data-no-swipe]");
@@ -717,7 +742,7 @@ function App() {
   function onTouchEnd(event) {
     const start = swipeStart.current;
     const touch = Array.from(event.changedTouches).find(item => item.identifier === start?.identifier);
-    if (!touch || event.touches.length || showForm || event.currentTarget.querySelector('[aria-modal="true"]')) {
+    if (!touch || event.touches.length || editingDashboard || showForm || event.currentTarget.querySelector('[aria-modal="true"]')) {
       resetSwipe(true);
       return;
     }
@@ -922,16 +947,81 @@ function App() {
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
-  const detailWidgets = extraWidgets.filter(([id]) => visible[id]);
-  const hasStats = visible.statEmails || visible.statAgenda || visible.statTasks || visible.statLate;
-  const hasPrimaryDetails = visible.weather || visible.exchangeRates || visible.clock;
-  const items = [
-    [dashboard, LayoutDashboard],
-    ["E-mails", Mail],
-    ["Agenda", CalendarDays],
-    ["Tâches", CheckSquare],
-    ["Échéances", Clock3],
-  ];
+  const nextAgenda = nav === dashboard
+    ? agendaDays(events, localDeadlines, homeNow).find(({ day }) => day >= dateISO(homeNow))?.entries[0]
+    : null;
+  const homeWidgets = nav === dashboard ? {
+    briefing: {
+      icon: Sparkles,
+      preview: <DashboardBriefing onOpen={() => navigate("Briefing intelligent", "briefing")}
+        received={account?.provider === "google" && !mailError && !busyMail ? messages.length : null}
+        processed={messages.filter((message) => analyses[message.id]).length}
+        completed={tasks.length - openTasks.length} open={openTasks.length} />,
+    },
+    agenda: {
+      icon: CalendarDays,
+      preview: <DashboardAgenda onOpen={() => navigate("Agenda", "agenda")}
+        item={nextAgenda && {
+          title: nextAgenda.title,
+          when: [prettyDue(nextAgenda.day), nextAgenda.start
+            ? time(nextAgenda.start) : nextAgenda.deadline?.time].filter(Boolean).join(" · "),
+        }} />,
+    },
+    monthlyCalendar: {
+      icon: CalendarDays,
+      preview: <DashboardCalendar now={homeNow} items={calendarItems(localDeadlines, tasks, events)}
+        onOpen={() => navigate("Calendrier mensuel", "monthlyCalendar")} />,
+    },
+    statEmails: {
+      icon: Mail,
+      preview: <Stat icon={Mail} label="E-mails récents" tone="purple"
+        value={busyMail || !account || mailError ? "—" : displayMessages.length}
+        sub={account?.provider === "google"
+          ? `${loadedHours} dernières heures · Emmaüs` : "Expéditeurs @emmaus-scherwiller.fr"}
+        route={routes["E-mails"]} widget="statEmails" onOpen={() => navigate("E-mails", "statEmails")} />,
+    },
+    statAgenda: {
+      icon: CalendarDays,
+      preview: <Stat icon={CalendarDays} label="Rendez-vous à venir" tone="blue"
+        value={busyMail || (mailError && account?.provider === "microsoft") ? "—" : visibleEvents.length}
+        sub="Agenda de l’application"
+        route={routes.Agenda} widget="statAgenda" onOpen={() => navigate("Agenda", "statAgenda")} />,
+    },
+    statTasks: {
+      icon: CheckSquare,
+      preview: <Stat icon={CheckSquare} label="Tâches en cours" tone="orange" value={openTasks.length}
+        sub="À garder à l’œil" route={routes.Tâches} widget="statTasks"
+        onOpen={() => navigate("Tâches", "statTasks")} />,
+    },
+    statLate: {
+      icon: Clock3,
+      preview: <Stat icon={Clock3} label="Échéances dépassées" tone="green" value={late}
+        sub={late ? "À traiter en priorité" : "Tout est à jour"} route={routes.Échéances} widget="statLate"
+        onOpen={() => navigate("Échéances", "statLate")} />,
+    },
+    weather: {
+      icon: CloudSun,
+      preview: <Weather city={weatherCity} unit={widgetSettings.weatherUnit}
+        refreshMinutes={widgetSettings.weatherRefresh} compact onOpen={() => navigate("Météo", "weather")} />,
+    },
+    exchangeRates: {
+      icon: ArrowDownUp,
+      preview: <ExchangeRates compact onOpen={() => navigate("Devises", "exchangeRates")} />,
+    },
+    clock: {
+      icon: Clock3,
+      preview: <Clock compact onOpen={() => navigate("Horloge", "clock")} />,
+    },
+    ...Object.fromEntries(extraWidgets.map(([id, destination, icon, label = destination]) => [id, {
+      icon,
+      preview: <DashboardTile id={id} route={routes[destination]} icon={icon} label={label}
+        onOpen={() => navigate(destination, id)} />,
+    }])),
+    timer: {
+      icon: TimerIcon,
+      preview: <TimerTile timer={timerControls.timer} onOpen={() => navigate("Minuteur", "timer")} />,
+    },
+  } : null;
   const sectionTitle = {
     "E-mails": "Mes e-mails",
     Agenda: "Mon agenda",
@@ -942,7 +1032,7 @@ function App() {
   return (
     <div
       className={
-        "app " +
+        "app display-shell " +
         (nav === dashboard ? "dashboard-home" : "dashboard-section")
       }
       onTouchStart={onTouchStart}
@@ -950,143 +1040,24 @@ function App() {
       onTouchEnd={onTouchEnd}
       onTouchCancel={() => resetSwipe(true)}
     >
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-icon">
-            p<span>.</span>
-          </div>
-          <div>
-            <strong>
-              pilotage<span>.</span>
-            </strong>
-            <small>ESPACE DE TRAVAIL</small>
-          </div>
-        </div>
-        <div className="side-label">MENU PRINCIPAL</div>
-        <nav>
-          {items.map(([name, Icon]) => (
-            <button
-              key={name}
-              className={"nav-item " + (nav === name ? "active" : "")}
-              aria-label={name}
-              aria-current={nav === name ? "page" : undefined}
-              onClick={() => navigate(name)}
-            >
-              <Icon size={18} />
-              <span>{name}</span>
-              {name === "Tâches" && openTasks.length > 0 && (
-                <b>{openTasks.length}</b>
-              )}
-            </button>
-          ))}
-        </nav>
-        <div className="side-bottom">
-          <button
-            className={"nav-item " + (nav === "Paramètres" ? "active" : "")}
-            onClick={() => navigate("Paramètres")}
-          >
-            <Settings size={18} /> Paramètres
-          </button>
-          <div className="profile">
-            <div className="avatar">{account?.name?.charAt(0) || "IT"}</div>
-            <div>
-              <strong>{account?.name || "Mon espace"}</strong>
-              <small>Chargé informatique</small>
-            </div>
-          </div>
-        </div>
-      </aside>
-      {nav === dashboard && !showForm && (
-        <button
-          ref={settingsShortcut}
-          type="button"
-          className="desktop-settings-shortcut"
-          aria-label="Ouvrir les paramètres"
-          title="Paramètres"
-          onClick={() => navigate("Paramètres", "settingsShortcut")}
-        >
-          <Settings size={20} aria-hidden="true" />
-        </button>
-      )}
       <main
         ref={swipePanel}
         className={nav === dashboard || nav === "Paramètres" ? "main swipe-panel" : "main"}
       >
-        {nav !== "Paramètres" && (
-          <header className="topbar">
-            <div className="breadcrumb">
-              Espace de travail <ChevronRight size={14} />{" "}
-              <strong>{sectionTitle}</strong>
-            </div>
-            <div className="header-right">
-              <span className={"status " + (account ? "connected" : "")}>
-                <i />
-                {busyMail
-                  ? "Chargement…"
-                  : account
-                    ? account.provider === "google"
-                      ? "Gmail connecté"
-                      : "Microsoft connecté"
-                    : sessionUnavailable
-                      ? "Vérification indisponible"
-                      : "Messagerie non connectée"}
-              </span>
-              <button
-                className="icon-button"
-                aria-label="Paramètres"
-                onClick={() => navigate("Paramètres")}
-              >
-                <Settings size={18} />
-              </button>
-              <div className="avatar small">
-                {account?.name?.charAt(0) || "IT"}
-              </div>
-            </div>
-          </header>
-        )}
         <div className={nav === "Paramètres" ? "content settings-page" : "content"}>
-          {nav !== dashboard && nav !== "Paramètres" && (
-            <button type="button" className="detail-back" onClick={() => navigate(dashboard)}>
-              <ArrowLeft size={16} aria-hidden="true" /> Tableau de bord
-            </button>
-          )}
-          {nav === "Paramètres" ? (
-            <header className="settings-page-heading">
-              <button type="button" className="settings-back" onClick={() => navigate(dashboard)}>
-                <ArrowLeft size={17} aria-hidden="true" /> Tableau de bord
+          {nav !== dashboard && (
+            <header className={nav === "Paramètres" ? "display-page-heading settings-page-heading" : "display-page-heading"}>
+              <button type="button" className={nav === "Paramètres" ? "settings-back" : "detail-back"}
+                onClick={() => navigate(dashboard)} aria-label="Tableau de bord">
+                <ArrowLeft size={22} aria-hidden="true" /><span className="sr-only">Tableau de bord</span>
               </button>
-              <h1 ref={pageHeading} tabIndex={-1}>Paramètres</h1>
-            </header>
-          ) : (
-            <div className="intro">
-              <div>
-                <div className="eyebrow">
-                  TON ESPACE DE TRAVAIL <span>✳</span>
-                </div>
-                <h1
-                  ref={nav !== dashboard ? pageHeading : null}
-                  tabIndex={nav !== dashboard ? -1 : undefined}
-                >
-                  {nav === dashboard
-                    ? `Bonjour${account?.name ? ", " + account.name.split(" ")[0] : ""} 👋`
-                    : sectionTitle}
-                </h1>
-                <p>
-                  {nav === dashboard
-                    ? "Voici ce qui se passe dans votre journée."
-                    : "Retrouvez les informations importantes au même endroit."}
-                </p>
-              </div>
-              <div className="intro-actions">
-                <span className="today">
-                  <CalendarDays size={16} />
-                  {fmt(day, { weekday: "long", day: "numeric", month: "long" })}
-                </span>
-                <button className="primary" onClick={() => setShowForm(true)}>
-                  <Plus size={17} /> Nouvelle tâche
+              <h1 ref={pageHeading} tabIndex={-1}>{sectionTitle}</h1>
+              {(nav === "Tâches" || nav === "Échéances") && (
+                <button className="primary" type="button" onClick={() => setShowForm(true)}>
+                  <Plus size={17} aria-hidden="true" /> Nouvelle tâche
                 </button>
-              </div>
-            </div>
+              )}
+            </header>
           )}
           {nav !== "Paramètres" && ["connecting", "working", "waiting"].includes(syncStatus) && (
             <Loading
@@ -1181,6 +1152,22 @@ function App() {
               </details>
             </section>
           )}
+          {nav === "Paramètres" && (
+            <section className="settings-panel settings-display-card" aria-labelledby="settings-display-title">
+              <h2 id="settings-display-title">Affichage</h2>
+              <div className="settings-service">
+                <div className="settings-service-icon"><Pencil size={19} aria-hidden="true" /></div>
+                <div className="settings-service-copy">
+                  <h3>Disposition de l’accueil</h3>
+                  <p>Déplacer et redimensionner les tuiles.</p>
+                </div>
+                <button className="secondary" type="button" onClick={() => {
+                  navigate(dashboard);
+                  setEditingDashboard(true);
+                }}>Modifier la grille</button>
+              </div>
+            </section>
+          )}
           <WidgetSettings
             shown={nav === "Paramètres"}
             settings={widgetSettings}
@@ -1201,138 +1188,18 @@ function App() {
           </React.Suspense>
           {nav !== "Paramètres" && (
             <>
-              {nav === dashboard && (
-                <>
-                  {hasStats && (
-                    <div className="summary-grid">
-                      {visible.statEmails && (
-                        <Stat
-                          icon={Mail}
-                          label="E-mails récents"
-                          value={
-                            busyMail || !account || mailError
-                              ? "—"
-                              : displayMessages.length
-                          }
-                          sub={
-                            account?.provider === "google"
-                              ? `${loadedHours} dernières heures · Emmaüs`
-                              : "Expéditeurs @emmaus-scherwiller.fr"
-                          }
-                          tone="purple"
-                          route={routes["E-mails"]}
-                          widget="statEmails"
-                          onOpen={() => navigate("E-mails", "statEmails")}
-                        />
-                      )}
-                      {visible.statAgenda && (
-                        <Stat
-                          icon={CalendarDays}
-                          label="Rendez-vous à venir"
-                          value={
-                            busyMail ||
-                            (mailError && account?.provider === "microsoft")
-                              ? "—"
-                              : visibleEvents.length
-                          }
-                          sub="Agenda de l’application"
-                          tone="blue"
-                          route={routes["Agenda"]}
-                          widget="statAgenda"
-                          onOpen={() => navigate("Agenda", "statAgenda")}
-                        />
-                      )}
-                      {visible.statTasks && (
-                        <Stat
-                          icon={CheckSquare}
-                          label="Tâches en cours"
-                          value={openTasks.length}
-                          sub="À garder à l’œil"
-                          tone="orange"
-                          route={routes["Tâches"]}
-                          widget="statTasks"
-                          onOpen={() => navigate("Tâches", "statTasks")}
-                        />
-                      )}
-                      {visible.statLate && (
-                        <Stat
-                          icon={Clock3}
-                          label="Échéances dépassées"
-                          value={late}
-                          sub={
-                            late ? "À traiter en priorité" : "Tout est à jour"
-                          }
-                          tone="green"
-                          route={routes["Échéances"]}
-                          widget="statLate"
-                          onOpen={() => navigate("Échéances", "statLate")}
-                        />
-                      )}
-                    </div>
-                  )}
-                  {hasPrimaryDetails && (
-                    <div className="home-details-grid">
-                      {visible.weather && (
-                        <Weather
-                          city={weatherCity}
-                          unit={widgetSettings.weatherUnit}
-                          refreshMinutes={widgetSettings.weatherRefresh}
-                          compact
-                          onOpen={() => navigate("Météo", "weather")}
-                        />
-                      )}
-                      {(visible.exchangeRates || visible.clock) && (
-                        <div className="detail-tiles">
-                          {visible.exchangeRates && (
-                            <ExchangeRates compact onOpen={() => navigate("Devises", "exchangeRates")} />
-                          )}
-                          {visible.clock && (
-                            <Clock compact onOpen={() => navigate("Horloge", "clock")} />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {detailWidgets.length > 0 && (
-                    <div className="home-extra-widgets">
-                      {detailWidgets.map(([id, destination, Icon, label = destination]) => (
-                        <button
-                          key={id}
-                          type="button"
-                          className="card detail-tile"
-                          data-widget-id={id}
-                          data-widget-route={routes[destination]}
-                          onClick={() => navigate(destination, id)}
-                        >
-                          <span className="detail-tile-icon"><Icon size={18} aria-hidden="true" /></span>
-                          <span>{label}</span>
-                          <ArrowUpRight size={14} aria-hidden="true" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {!hasStats && !hasPrimaryDetails && detailWidgets.length === 0 && (
-                    <div className="home-empty">
-                      <p>Aucun widget affiché.</p>
-                      <button
-                        type="button"
-                        className="secondary"
-                        data-widget-id="homeSettings"
-                        data-widget-route="parametres"
-                        onClick={() => navigate("Paramètres", "homeSettings")}
-                      >
-                        <Settings size={17} aria-hidden="true" /> Ouvrir les paramètres
-                      </button>
-                    </div>
-                  )}
-                </>
+              {homeWidgets && (
+                <DashboardGrid date={homeNow} visible={visible} widgets={homeWidgets}
+                  editing={editingDashboard} onEditingChange={setEditingDashboard}
+                  onOpenSettings={(id) => navigate("Paramètres", id)} />
               )}
+              {nav === "Minuteur" && <TimerPage {...timerControls} />}
               {nav === "Calendrier mensuel" && (
                 <MonthlyCalendar
                   deadlines={localDeadlines}
                   tasks={tasks}
                   events={events}
-                  outlook={account?.provider === "microsoft"}
+                  provider={account?.provider}
                   loading={busyMail}
                   syncStatus={syncStatus}
                   onOpenAgenda={() => navigate("Agenda")}
@@ -1527,12 +1394,25 @@ function App() {
                 </section>
               )}
               {nav === "Météo" && (
-                <Weather
-                  city={weatherCity}
-                  onCityChange={changeWeatherCity}
-                  unit={widgetSettings.weatherUnit}
-                  refreshMinutes={widgetSettings.weatherRefresh}
-                />
+                <>
+                  <Weather
+                    city={weatherCity}
+                    unit={widgetSettings.weatherUnit}
+                    refreshMinutes={widgetSettings.weatherRefresh}
+                  />
+                  <div className="settings-page weather-settings">
+                    <WidgetSettings
+                      shown
+                      weatherOnly
+                      settings={widgetSettings}
+                      city={weatherCity}
+                      onSave={saveSettings}
+                      saveError={widgetSaveError}
+                      actionsTarget={settingsActionsTarget}
+                    />
+                    <div ref={setSettingsActionsTarget} className="settings-page-actions" />
+                  </div>
+                </>
               )}
               {nav === "Devises" && <ExchangeRates />}
               {nav === "Horloge" && <Clock />}
@@ -1637,83 +1517,19 @@ function App() {
                     </section>
                   )}
                   {nav === "Agenda" && (
-                    <section className="card">
-                      <div className="card-head">
-                        <div>
-                          <div className="section-kicker">À VENIR</div>
-                          <h2>Mon agenda</h2>
-                          <p>
-                            {account?.provider === "google"
-                              ? "Échéances locales · Google Agenda non connecté"
-                              : "Échéances locales et rendez-vous"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="event-list">
-                        {visibleEvents
-                          .slice(0, 50)
-                          .map((e) => (
-                            <div className="event-row" key={e.id}>
-                              <div className="event-date">
-                                <strong>
-                                  {fmt(e.start?.dateTime, { day: "2-digit" })}
-                                </strong>
-                                <span>
-                                  {fmt(e.start?.dateTime, {
-                                    month: "short",
-                                  }).replace(".", "")}
-                                </span>
-                              </div>
-                              <div className="event-info">
-                                <strong>{e.subject || "(Sans titre)"}</strong>
-                                <span>
-                                  <Clock3 size={13} />{" "}
-                                  {e.isLocal
-                                    ? e.time
-                                      ? "À " + e.time
-                                      : "Toute la journée"
-                                    : time(e.start?.dateTime) +
-                                      " – " +
-                                      time(e.end?.dateTime)}
-                                </span>
-                                <small>
-                                  {e.location?.displayName ||
-                                    "Sans lieu indiqué"}
-                                </small>
-                              </div>
-                              {e.isLocal ? (
-                                <button
-                                  className="remove"
-                                  aria-label="Supprimer l’échéance"
-                                  onClick={() =>
-                                    setLocalDeadlines((d) =>
-                                      d.filter((x) => x.id !== e.id),
-                                    )
-                                  }
-                                >
-                                  <X size={15} />
-                                </button>
-                              ) : (
-                                <ChevronRight size={16} className="chevron" />
-                              )}
-                            </div>
-                          ))}
-                        {busyMail && !visibleEvents.length ? (
-                          <Loading
-                            label="Chargement de l’agenda…"
-                            className="empty"
-                          />
-                        ) : (
-                          !visibleEvents.length && (
-                            <Empty text="Aucun rendez-vous à venir." />
-                          )
-                        )}
-                      </div>
-                      <div className="calendar-note">
-                        <CalendarDays size={16} /> Échéances internes ·
-                        synchronisation selon les paramètres
-                      </div>
-                    </section>
+                    <AgendaEvents
+                      events={events}
+                      deadlines={localDeadlines}
+                      provider={account?.provider}
+                      loading={busyMail}
+                      error={(account?.provider === "microsoft" ? mailError : agendaError) || sessionUnavailable}
+                      onRefresh={account && !weekRunning
+                        ? () => account.provider === "google" ? googleSync(false) : sync(account)
+                        : undefined}
+                      onRemoveDeadline={(id) =>
+                        setLocalDeadlines((items) => items.filter((item) => item.id !== id))
+                      }
+                    />
                   )}
                 </div>
               )}
@@ -1812,14 +1628,30 @@ function App() {
               )}
             </>
           )}
-          {nav !== dashboard && nav !== "Paramètres" && (
-            <footer>
-              <span>Votre espace, en toute simplicité.</span>
-              <span>POSTE DE PILOTAGE · V1</span>
-            </footer>
-          )}
         </div>
       </main>
+      {!showForm && !editingDashboard && (
+        <nav className="display-dock" aria-label="Navigation principale">
+          {dockItems.map(([destination, Icon, secondary]) => {
+            const isSettings = destination === "Paramètres";
+            const label = destination === dashboard ? "Accueil" : destination;
+            return (
+              <button key={destination} type="button" data-secondary={secondary || undefined}
+                className={isSettings ? "display-tab desktop-settings-shortcut" : "display-tab"}
+                ref={isSettings ? settingsShortcut : undefined}
+                aria-label={isSettings && nav === dashboard ? "Ouvrir les paramètres" : label}
+                aria-current={nav === destination ? "page" : undefined} title={label}
+                onClick={() => navigate(destination, isSettings ? "settingsShortcut" : undefined)}>
+                <Icon size={26} aria-hidden="true" />
+                <span className="sr-only">{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
+      {timerControls.timer.status === "finished" && (
+        <TimerAlert onDismiss={() => timerControls.dispatch({ type: "reset" })} />
+      )}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <form
@@ -1893,7 +1725,8 @@ function App() {
 }
 function Stat({ route, widget, icon: Icon, label, value, sub, tone, onOpen }) {
   return (
-    <button type="button" className="stat" data-widget-route={route} data-widget-id={widget} onClick={onOpen} aria-label={`Ouvrir ${label}`}>
+    <button type="button" className="stat" data-widget-route={route} data-widget-id={widget} onClick={onOpen}
+      aria-label={`Ouvrir ${label}, ${value === "—" ? "compteur indisponible" : value}`}>
       <div className="stat-top">
         <span className={"stat-icon " + tone}>
           <Icon size={19} />

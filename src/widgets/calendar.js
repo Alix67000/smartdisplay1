@@ -25,3 +25,60 @@ export function calendarItems(deadlines,tasks,events){
  for(const e of events||[]){const date=e.start?.dateTime,day=eventDay(date,e.isAllDay);let time=null;if(!e.isAllDay&&typeof date==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(date)){if(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(date)){const parsed=new Date(date);if(Number.isFinite(parsed.getTime()))time=`${String(parsed.getHours()).padStart(2,'0')}:${String(parsed.getMinutes()).padStart(2,'0')}`}else time=date.slice(11,16)}if(day)items.push({key:'event:'+e.id,day,title:e.subject||'Rendez-vous sans titre',kind:'event',time});}
  return items.sort((a,b)=>a.day.localeCompare(b.day)||(a.time||'').localeCompare(b.time||'')||a.title.localeCompare(b.title,'fr'));
 }
+
+function upcomingEvent(event, now, today) {
+ const startValue = event.start?.dateTime;
+ const endValue = event.end?.dateTime;
+ if (typeof startValue !== 'string') return null;
+ if (event.isAllDay) {
+  const startDay = eventDay(startValue, true);
+  if (!startDay) return null;
+  // Calendar providers return the first day after the event as its end date.
+  const endDay = eventDay(endValue, true);
+  const expired = endDay > startDay ? endDay <= today : startDay < today;
+  return expired ? null : {day: startDay < today ? today : startDay};
+ }
+
+ const start = new Date(startValue);
+ if (!Number.isFinite(start.getTime())) return null;
+ const parsedEnd = new Date(endValue);
+ const end = parsedEnd > start ? parsedEnd : null;
+ if ((end || start) < now) return null;
+ const startDay = localDay(start);
+ return {day: startDay < today ? today : startDay, start, end};
+}
+
+export function agendaDays(events, deadlines, now = new Date()) {
+ const today = localDay(now);
+ const items = [];
+ for (const event of events) {
+  const date = upcomingEvent(event, now, today);
+  if (!date) continue;
+  items.push({
+   ...date,
+   key: 'event:' + event.id,
+   title: event.subject || 'Rendez-vous sans titre',
+   location: event.location?.displayName,
+   order: date.start?.getTime() ?? -Infinity,
+  });
+ }
+ for (const deadline of deadlines) {
+  if (!validDay(deadline.date)) continue;
+  const scheduledTime = deadline.time ? new Date(deadline.date + 'T' + deadline.time).getTime() : NaN;
+  items.push({
+   key: 'deadline:' + deadline.id,
+   deadline,
+   day: deadline.date,
+   title: deadline.title || 'Échéance sans titre',
+   order: Number.isFinite(scheduledTime) ? scheduledTime : -Infinity,
+  });
+ }
+
+ const groups = new Map();
+ items.sort((a, b) => a.day.localeCompare(b.day) || a.order - b.order || a.title.localeCompare(b.title, 'fr'));
+ for (const item of items) {
+  if (!groups.has(item.day)) groups.set(item.day, []);
+  groups.get(item.day).push(item);
+ }
+ return Array.from(groups, ([day, entries]) => ({day, entries}));
+}
