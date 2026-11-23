@@ -229,9 +229,10 @@ async function run() {
 
     tile('emails').click();
     await at('emails', '.demo-banner');
+    await until(() => !document.querySelector('.demo-banner button').disabled, 'Connexion Google prête');
     window.fakeGooglePopupError = Object.assign(new Error('Popup bloquée'), { code: 'auth/popup-blocked' });
     document.querySelector('.demo-banner button').click();
-    await until(() => document.querySelector('.error[role="alert"]')?.textContent.includes('fenêtres surgissantes'),
+    await until(() => document.querySelector('.error[role="alert"]')?.textContent.includes('La fenêtre de connexion Google n’a pas pu s’ouvrir'),
       'Le blocage du popup doit être visible dans E-mails');
     assert.equal(window.location.hash, '#/emails');
     assert(document.querySelector('.demo-banner button'));
@@ -242,6 +243,29 @@ async function run() {
     assert.equal(window.location.hash, '#/emails');
   } finally {
     window.close();
+  }
+
+  let finishGooglePreparation;
+  let popupCalls = 0;
+  const coldGoogle = openPage('#/emails', window => {
+    window.fakeGooglePopupPreparation = new Promise(resolve => { finishGooglePreparation = resolve; });
+    window.onFakeGooglePopup = () => { popupCalls++; };
+  });
+  try {
+    const { document } = coldGoogle.window;
+    await until(() => document.querySelector('.demo-banner button'), 'Bouton Google au démarrage');
+    const connect = document.querySelector('.demo-banner button');
+    assert.equal(connect.disabled, true, 'Préparer Firebase avant d’autoriser le clic');
+    connect.click();
+    assert.equal(popupCalls, 0);
+    finishGooglePreparation();
+    await until(() => !connect.disabled, 'Connexion Google prête');
+    connect.click();
+    assert.equal(popupCalls, 1, 'Le SDK doit être appelé pendant le clic');
+    await until(() => document.querySelector('.error[role="alert"]')?.textContent.includes('préparer la connexion Google'),
+      'La session serveur reste obligatoire après la connexion Firebase');
+  } finally {
+    coldGoogle.window.close();
   }
 
   for (const [url, expectedRoute] of [['#/notes', 'notes'], ['?google=refus', 'briefing']]) {

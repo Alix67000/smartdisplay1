@@ -52,7 +52,7 @@ import DashboardGrid, {
 } from "./widgets/DashboardGrid.jsx";
 import { agendaDays, calendarItems } from "./widgets/calendar.js";
 import TimerPage, { TimerAlert, TimerTile, useTimer } from "./widgets/Timer.jsx";
-import { connectFirebase, firebaseAuth } from "./lib/firebase-client.js";
+import { connectFirebase, firebaseAuth, prepareGooglePopup } from "./lib/firebase-client.js";
 const SyncAccount = React.lazy(() => import("./widgets/SyncAccount.jsx"));
 import {
   readWidgetSettings,
@@ -345,12 +345,23 @@ function App() {
     [events, setEvents] = useState([]),
     [loading, setLoading] = useState(false),
     [checkingSession, setCheckingSession] = useState(true),
+    [googleAuthReady, setGoogleAuthReady] = useState(false),
     [sessionUnavailable, setSessionUnavailable] = useState(false),
     [mailError, setMailError] = useState(false),
     [agendaError, setAgendaError] = useState(false),
     [error, setError] = useState(""),
     [search, setSearch] = useState("");
   const { name: nav, entry } = navigation;
+  const offersGoogleConnection = googleReturnRoutes.includes(routes[nav]) && !account;
+  const googleConnectLabel = googleAuthReady ? "Connecter Google" : "Préparation de Google…";
+  useEffect(() => {
+    if (!offersGoogleConnection || googleAuthReady) return;
+    let active = true;
+    const enableConnection = () => { if (active) setGoogleAuthReady(true); };
+    // After a preparation error, let Firebase retry on an explicit click.
+    prepareGooglePopup().then(enableConnection, enableConnection);
+    return () => { active = false; };
+  }, [offersGoogleConnection, googleAuthReady]);
   const homeNow = useDashboardMinute(nav === dashboard);
   const previousNavigation = useRef(navigation);
   useEffect(() => {
@@ -667,6 +678,7 @@ function App() {
     }
   }
   async function connectGoogle() {
+    if (!googleAuthReady) return;
     setError("");
     if (account?.provider === "microsoft") {
       setError("Déconnecte d’abord Outlook.");
@@ -696,7 +708,8 @@ function App() {
       setLoading(false);
       const messages = {
         "auth/popup-closed-by-user": "Connexion Google annulée.",
-        "auth/popup-blocked": "Autorisez les fenêtres surgissantes pour connecter Google, puis réessayez.",
+        "auth/popup-blocked": "La fenêtre de connexion Google n’a pas pu s’ouvrir. Réessaie depuis un onglet du navigateur.",
+        "auth/web-storage-unsupported": "Le navigateur ne permet pas à Firebase d’accéder au stockage nécessaire à la connexion Google.",
         "auth/unauthorized-domain": "Ce domaine doit être autorisé dans la configuration de connexion Google de Smart Display.",
       };
       setError(messages[e?.code] || e.message || "Connexion Google impossible.");
@@ -1091,8 +1104,8 @@ function App() {
                   Ta messagerie n’est pas connectée. Tes notes et tes tâches
                   restent accessibles.
                 </span>
-                <button type="button" onClick={connectGoogle}>
-                  Connecter Google <ArrowUpRight size={15} />
+                <button type="button" onClick={connectGoogle} disabled={!googleAuthReady}>
+                  {googleConnectLabel} <ArrowUpRight size={15} />
                 </button>
               </div>
             )}
@@ -1118,8 +1131,8 @@ function App() {
                       <LogOut size={15} aria-hidden="true" /> Déconnecter
                     </button>
                   ) : (
-                    <button className="primary" type="button" onClick={connectGoogle} disabled={busyMail || !!account}>
-                      Connecter Google
+                    <button className="primary" type="button" onClick={connectGoogle} disabled={busyMail || !googleAuthReady || !!account}>
+                      {googleConnectLabel}
                     </button>
                   )}
                 </div>
@@ -1276,8 +1289,9 @@ function App() {
                         <button
                           className="text-link"
                           onClick={connectGoogle}
+                          disabled={!googleAuthReady}
                         >
-                          Connecter Google{" "}
+                          {googleConnectLabel}{" "}
                           <ArrowUpRight size={14} />
                         </button>
                       </div>

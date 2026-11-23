@@ -6,5 +6,12 @@ export const app=getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const firebaseAuth=getAuth(app);
 export function observeFirebaseTokens(listener){return onIdTokenChanged(firebaseAuth,listener)}
 export function observeFirebaseUser(listener){return onAuthStateChanged(firebaseAuth,listener)}
+export async function prepareGooglePopup() {
+  await firebaseAuth.authStateReady();
+  if (firebaseAuth.currentUser) return;
+  // Warm the same Firebase resolver signInWithPopup uses. Its first iframe load
+  // can otherwise outlast the browser's transient activation for the click.
+  await firebaseAuth._popupRedirectResolver?._initialize?.(firebaseAuth);
+}
 export function connectFirebase(){return signInWithPopup(firebaseAuth,new GoogleAuthProvider())}
 export function disconnectFirebase(){return signOut(firebaseAuth)}
